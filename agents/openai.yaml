@@ -1,0 +1,4 @@
+interface:
+  display_name: "玉山銀行 CLI"
+  short_description: "使用 Python Playwright 自動登入玉山網銀並擷取帳戶資訊。"
+  default_prompt: "使用玉山銀行 CLI 取得帳戶餘額。"
