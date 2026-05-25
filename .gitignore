@@ -17,3 +17,4 @@ credentials.json
 *.log
 
 .playwright-cli/
+*.env
