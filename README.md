@@ -1,11 +1,12 @@
-# 玉山銀行 CLI Codex Skill
+# 玉山銀行 CLI Skill
 
-這是一個給 Codex 使用的自訂 skill，透過 Python Playwright 自動操作玉山銀行個人網路銀行，提供帳戶餘額查詢與最近一個月信用卡交易查詢的 CLI 工具。
+這是一個給 Agent 使用的自訂 skill，透過 Python Playwright 自動操作玉山銀行個人網路銀行，提供帳戶餘額查詢、信用卡帳單查詢與最近一個月信用卡交易查詢的 CLI 工具。
 
 ## 功能
 
 - 登入玉山銀行個人網路銀行
 - 查詢臺幣帳戶總覽與總餘額
+- 查詢信用卡帳單月份與應繳總金額
 - 查詢最近一個月信用卡交易明細
 - 支援 JSON 與純文字輸出
 - 支援遮蔽帳號或卡號輸出
@@ -15,7 +16,7 @@
 
 ```text
 .
-├── SKILL.md              # Codex skill 入口與操作指引
+├── SKILL.md              # skill 入口與操作指引
 ├── agents/openai.yaml    # Codex 顯示名稱與預設提示
 ├── scripts/              # Python CLI 與銀行自動化流程
 ├── requirements.txt      # Python 套件需求
@@ -86,12 +87,26 @@ python scripts/esun_bank_cli.py balance
 python scripts/esun_bank_cli.py card-transactions
 ```
 
+查詢信用卡帳單月份與應繳總金額：
+
+```bash
+python scripts/esun_bank_cli.py card-bills
+```
+
+查詢指定月份信用卡帳單明細：
+
+```bash
+python scripts/esun_bank_cli.py card-bill-details --month 0115/04
+```
+
 常用選項：
 
 ```bash
 python scripts/esun_bank_cli.py balance --output text
 python scripts/esun_bank_cli.py balance --headed
 python scripts/esun_bank_cli.py balance --credentials-file credentials.json
+python scripts/esun_bank_cli.py card-bills --output text
+python scripts/esun_bank_cli.py card-bill-details --month 0115/04 --output text
 python scripts/esun_bank_cli.py card-transactions --mask-accounts
 ```
 

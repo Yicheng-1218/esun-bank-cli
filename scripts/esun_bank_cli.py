@@ -7,6 +7,7 @@ import sys
 from typing import Any, Awaitable, Callable
 
 from esun_bank.balance import run_balance
+from esun_bank.card_bills import run_card_bill_details, run_card_bills
 from esun_bank.card_transactions import run_card_transactions
 from esun_bank.output import write_output
 from esun_bank.session import DEFAULT_URL, ENV_ID, ENV_PASSWORD, ENV_USER, CliError
@@ -51,11 +52,23 @@ def build_parser() -> argparse.ArgumentParser:
     card_transactions = subparsers.add_parser(
         "card-transactions", help="Get recent-month credit card transactions")
     add_common_options(card_transactions, "Mask card numbers in output.")
+
+    card_bills = subparsers.add_parser(
+        "card-bills", help="Get credit card bill months and total due amounts")
+    add_common_options(card_bills, "Mask account numbers in output.")
+
+    card_bill_details = subparsers.add_parser(
+        "card-bill-details", help="Get details for one credit card bill month")
+    add_common_options(card_bill_details, "Mask account numbers in output.")
+    card_bill_details.add_argument(
+        "--month", required=True, help="Bill month to open, for example 0115/04.")
     return parser
 
 
 COMMAND_RUNNERS: dict[str, CommandRunner] = {
     "balance": run_balance,
+    "card-bill-details": run_card_bill_details,
+    "card-bills": run_card_bills,
     "card-transactions": run_card_transactions,
 }
 
