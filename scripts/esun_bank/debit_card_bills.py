@@ -5,7 +5,8 @@ from typing import Any
 
 from playwright.async_api import Frame
 
-from .session import CliError, run_with_login
+from .output import mask_sensitive_accounts
+from .session import CliError, read_debug_page_text, run_with_login
 
 
 DEBIT_CARD_BILLS_TITLE = "簽帳金融卡帳單月份"
@@ -28,7 +29,7 @@ async def open_debit_card_bill_page(frame: Frame, timeout_ms: int) -> None:
 
 
 async def query_debit_card_bill_month(
-    frame: Frame, month: str, timeout_ms: int
+    frame: Frame, month: str, timeout_ms: int, debug_page_text: bool = False
 ) -> None:
     """選取指定月份並送出查詢。"""
 
@@ -71,18 +72,16 @@ async def query_debit_card_bill_month(
             timeout=timeout_ms
         )
     except Exception as exc:
-        message = await frame.evaluate(
-            """
-            () => (document.body.innerText || '').replace(/\\s+/g, ' ').trim()
-            """
-        )
-        if message:
-            raise CliError(
-                f"Debit card bill detail did not load for {month}: {message}"
-            ) from exc
-        raise CliError(
-            f"Debit card bill detail did not load for {month}."
-        ) from exc
+        message = f"Debit card bill detail did not load for {month}."
+        if debug_page_text:
+            page_text = await read_debug_page_text(frame)
+            message = f"{message} Page text: {page_text}"
+        else:
+            message = (
+                f"{message} Page text suppressed; re-run with --debug-page-text "
+                "only on a trusted local terminal."
+            )
+        raise CliError(message) from exc
 
 
 async def extract_debit_card_bill_details(frame: Frame, month: str) -> dict[str, Any]:
@@ -189,7 +188,10 @@ async def run_debit_card_bills(args: argparse.Namespace) -> dict[str, Any]:
         for month in months:
             await open_debit_card_bill_page(frame, args.timeout_ms)
             await query_debit_card_bill_month(
-                frame, month["statement_month"], args.timeout_ms
+                frame,
+                month["statement_month"],
+                args.timeout_ms,
+                args.debug_page_text,
             )
             summary = await extract_debit_card_bill_summary(
                 frame, month["statement_month"]
@@ -201,7 +203,10 @@ async def run_debit_card_bills(args: argparse.Namespace) -> dict[str, Any]:
             "bills": bills,
         }
 
-    return await run_with_login(args, query_bills)
+    result = await run_with_login(args, query_bills)
+    if not args.show_full_accounts:
+        return mask_sensitive_accounts(result)
+    return result
 
 
 async def run_debit_card_bill_details(args: argparse.Namespace) -> dict[str, Any]:
@@ -209,7 +214,12 @@ async def run_debit_card_bill_details(args: argparse.Namespace) -> dict[str, Any
 
     async def query_details(frame: Frame) -> dict[str, Any]:
         await open_debit_card_bill_page(frame, args.timeout_ms)
-        await query_debit_card_bill_month(frame, args.month, args.timeout_ms)
+        await query_debit_card_bill_month(
+            frame, args.month, args.timeout_ms, args.debug_page_text
+        )
         return await extract_debit_card_bill_details(frame, args.month)
 
-    return await run_with_login(args, query_details)
+    result = await run_with_login(args, query_details)
+    if not args.show_full_accounts:
+        return mask_sensitive_accounts(result)
+    return result

@@ -103,7 +103,7 @@ async def run_card_transactions(args: argparse.Namespace) -> dict[str, Any]:
 
     result = await run_with_login(args, query_recent_month)
 
-    if args.mask_accounts:
+    if not args.show_full_accounts:
         for transaction in result["transactions"]:
             transaction["card_number"] = mask_account(transaction["card_number"])
     return result
