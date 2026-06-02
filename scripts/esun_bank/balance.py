@@ -80,7 +80,7 @@ async def run_balance(args: argparse.Namespace) -> dict[str, Any]:
 
     result = await run_with_login(args, extract_twd_balance)
 
-    if args.mask_accounts:
+    if not args.show_full_accounts:
         for account in result["accounts"]:
             account["account"] = mask_account(account["account"])
     return result
