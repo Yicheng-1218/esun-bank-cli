@@ -1,13 +1,14 @@
 # 玉山銀行 CLI Skill
 
-這是一個給 Agent 使用的自訂 skill，透過 Python Playwright 自動操作玉山銀行個人網路銀行，提供帳戶餘額查詢、信用卡帳單查詢與最近一個月信用卡交易查詢的 CLI 工具。
+這是一個給 Agent 使用的自訂 skill，透過 Python Playwright 自動操作玉山銀行個人網路銀行，提供帳戶餘額查詢、信用卡帳單查詢、信用卡交易查詢與簽帳金融卡交易查詢的 CLI 工具。
 
 ## 功能
 
 - 登入玉山銀行個人網路銀行
 - 查詢臺幣帳戶總覽與總餘額
-- 查詢信用卡帳單月份與應繳總金額
+- 查詢信用卡帳單月份與總額
 - 查詢最近一個月信用卡交易明細
+- 查詢最近一個月簽帳金融卡交易明細
 - 支援 JSON 與純文字輸出
 - 支援遮蔽帳號或卡號輸出
 - 可透過環境變數或本機 `credentials.json` 提供登入資訊
@@ -84,19 +85,37 @@ python scripts/esun_bank_cli.py balance
 查詢最近一個月信用卡交易：
 
 ```bash
-python scripts/esun_bank_cli.py card-transactions
+python scripts/esun_bank_cli.py credit-card-transactions
+```
+
+查詢最近一個月簽帳金融卡交易：
+
+```bash
+python scripts/esun_bank_cli.py debit-card-transactions
+```
+
+查詢指定月份簽帳金融卡帳單明細：
+
+```bash
+python scripts/esun_bank_cli.py debit-card-bill-details --month 115/04
+```
+
+查詢簽帳金融卡帳單月份與總額：
+
+```bash
+python scripts/esun_bank_cli.py debit-card-bills
 ```
 
 查詢信用卡帳單月份與應繳總金額：
 
 ```bash
-python scripts/esun_bank_cli.py card-bills
+python scripts/esun_bank_cli.py credit-card-bills
 ```
 
 查詢指定月份信用卡帳單明細：
 
 ```bash
-python scripts/esun_bank_cli.py card-bill-details --month 0115/04
+python scripts/esun_bank_cli.py credit-card-bill-details --month 0115/04
 ```
 
 常用選項：
@@ -105,9 +124,12 @@ python scripts/esun_bank_cli.py card-bill-details --month 0115/04
 python scripts/esun_bank_cli.py balance --output text
 python scripts/esun_bank_cli.py balance --headed
 python scripts/esun_bank_cli.py balance --credentials-file credentials.json
-python scripts/esun_bank_cli.py card-bills --output text
-python scripts/esun_bank_cli.py card-bill-details --month 0115/04 --output text
-python scripts/esun_bank_cli.py card-transactions --mask-accounts
+python scripts/esun_bank_cli.py credit-card-bills --output text
+python scripts/esun_bank_cli.py credit-card-bill-details --month 0115/04 --output text
+python scripts/esun_bank_cli.py credit-card-transactions --mask-accounts
+python scripts/esun_bank_cli.py debit-card-transactions --mask-accounts
+python scripts/esun_bank_cli.py debit-card-bills --output text
+python scripts/esun_bank_cli.py debit-card-bill-details --month 115/04 --output text
 ```
 
 預設為 headless 模式。只有在需要看見瀏覽器操作時才使用 `--headed`。

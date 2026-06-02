@@ -9,6 +9,11 @@ from typing import Any, Awaitable, Callable
 from esun_bank.balance import run_balance
 from esun_bank.card_bills import run_card_bill_details, run_card_bills
 from esun_bank.card_transactions import run_card_transactions
+from esun_bank.debit_card_bills import (
+    run_debit_card_bill_details,
+    run_debit_card_bills,
+)
+from esun_bank.debit_card_transactions import run_debit_card_transactions
 from esun_bank.output import write_output
 from esun_bank.session import DEFAULT_URL, ENV_ID, ENV_PASSWORD, ENV_USER, CliError
 
@@ -49,27 +54,57 @@ def build_parser() -> argparse.ArgumentParser:
         "balance", help="Get Taiwan-dollar account balances")
     add_common_options(balance, "Mask account numbers in output.")
 
-    card_transactions = subparsers.add_parser(
-        "card-transactions", help="Get recent-month credit card transactions")
-    add_common_options(card_transactions, "Mask card numbers in output.")
+    credit_card_transactions = subparsers.add_parser(
+        "credit-card-transactions",
+        help="Get recent-month credit card transactions",
+    )
+    add_common_options(credit_card_transactions, "Mask card numbers in output.")
 
-    card_bills = subparsers.add_parser(
-        "card-bills", help="Get credit card bill months and total due amounts")
-    add_common_options(card_bills, "Mask account numbers in output.")
+    credit_card_bills = subparsers.add_parser(
+        "credit-card-bills",
+        help="Get credit card bill months and total amounts",
+    )
+    add_common_options(credit_card_bills, "Mask account numbers in output.")
 
-    card_bill_details = subparsers.add_parser(
-        "card-bill-details", help="Get details for one credit card bill month")
-    add_common_options(card_bill_details, "Mask account numbers in output.")
-    card_bill_details.add_argument(
+    credit_card_bill_details = subparsers.add_parser(
+        "credit-card-bill-details",
+        help="Get details for one credit card bill month",
+    )
+    add_common_options(credit_card_bill_details, "Mask account numbers in output.")
+    credit_card_bill_details.add_argument(
         "--month", required=True, help="Bill month to open, for example 0115/04.")
+
+    debit_card_transactions = subparsers.add_parser(
+        "debit-card-transactions",
+        help="Get recent-month debit card transactions",
+    )
+    add_common_options(debit_card_transactions, "Mask card numbers in output.")
+
+    debit_card_bills = subparsers.add_parser(
+        "debit-card-bills",
+        help="Get debit card bill months and total amounts",
+    )
+    add_common_options(debit_card_bills, "Mask card numbers in output.")
+
+    debit_card_bill_details = subparsers.add_parser(
+        "debit-card-bill-details",
+        help="Get details for one debit card bill month",
+    )
+    add_common_options(debit_card_bill_details, "Mask card numbers in output.")
+    debit_card_bill_details.add_argument(
+        "--month", required=True, help="Bill month to open, for example 115/04."
+    )
     return parser
 
 
 COMMAND_RUNNERS: dict[str, CommandRunner] = {
     "balance": run_balance,
-    "card-bill-details": run_card_bill_details,
-    "card-bills": run_card_bills,
-    "card-transactions": run_card_transactions,
+    "credit-card-bill-details": run_card_bill_details,
+    "credit-card-bills": run_card_bills,
+    "credit-card-transactions": run_card_transactions,
+    "debit-card-bill-details": run_debit_card_bill_details,
+    "debit-card-bills": run_debit_card_bills,
+    "debit-card-transactions": run_debit_card_transactions,
 }
 
 

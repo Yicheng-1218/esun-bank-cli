@@ -50,7 +50,7 @@ async def extract_card_bills(frame: Frame) -> dict[str, Any]:
             .filter(row => row.length >= 2 && row[0] && row[1])
             .map(row => ({
               statement_month: row[0],
-              total_due: row[1]
+              total_amount: row[1]
             }));
         }
         """

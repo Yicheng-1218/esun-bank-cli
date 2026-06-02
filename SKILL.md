@@ -71,9 +71,12 @@ Script:
 
 ```bash
 python scripts/esun_bank_cli.py balance
-python scripts/esun_bank_cli.py card-bills
-python scripts/esun_bank_cli.py card-bill-details --month 0115/04
-python scripts/esun_bank_cli.py card-transactions
+python scripts/esun_bank_cli.py credit-card-bills
+python scripts/esun_bank_cli.py credit-card-bill-details --month 0115/04
+python scripts/esun_bank_cli.py credit-card-transactions
+python scripts/esun_bank_cli.py debit-card-bill-details --month 115/04
+python scripts/esun_bank_cli.py debit-card-bills
+python scripts/esun_bank_cli.py debit-card-transactions
 ```
 
 Useful options:
@@ -82,9 +85,12 @@ Useful options:
 python scripts/esun_bank_cli.py balance --headed
 python scripts/esun_bank_cli.py balance --credentials-file credentials.json
 python scripts/esun_bank_cli.py balance --output text
-python scripts/esun_bank_cli.py card-bills --output text
-python scripts/esun_bank_cli.py card-bill-details --month 0115/04 --output text
-python scripts/esun_bank_cli.py card-transactions --mask-accounts
+python scripts/esun_bank_cli.py credit-card-bills --output text
+python scripts/esun_bank_cli.py credit-card-bill-details --month 0115/04 --output text
+python scripts/esun_bank_cli.py credit-card-transactions --mask-accounts
+python scripts/esun_bank_cli.py debit-card-bill-details --month 115/04 --output text
+python scripts/esun_bank_cli.py debit-card-bills --output text
+python scripts/esun_bank_cli.py debit-card-transactions --mask-accounts
 ```
 
 Default mode is headless. Use `--headed` only when the user asks to see the browser.
@@ -99,7 +105,7 @@ The `balance` command:
 5. Extracts Taiwan-dollar account rows and total balance
 6. Prints JSON by default
 
-The `card-transactions` command:
+The `credit-card-transactions` command:
 
 1. Logs in with the same credential loading rules
 2. Opens the credit-card transaction query page
@@ -108,20 +114,47 @@ The `card-transactions` command:
 5. Extracts query period, sort mode, transaction rows, and subtotals
 6. Prints JSON by default
 
-The `card-bills` command:
+The `credit-card-bills` command:
 
 1. Logs in with the same credential loading rules
 2. Opens the credit-card bill information page
-3. Extracts bill months and total due amounts
+3. Extracts bill months and total amounts
 4. Prints JSON by default
 
-The `card-bill-details` command:
+The `credit-card-bill-details` command:
 
 1. Logs in with the same credential loading rules
 2. Opens the credit-card bill information page
 3. Finds the requested bill month
 4. Clicks that row's detail link
 5. Extracts the detail table headers and rows
+6. Prints JSON by default
+
+The `debit-card-transactions` command:
+
+1. Logs in with the same credential loading rules
+2. Opens the debit-card transaction query page
+3. Selects `最近一個月`
+4. Clicks `查詢`
+5. Extracts query period, sort mode, and transaction rows
+6. Prints JSON by default
+
+The `debit-card-bill-details` command:
+
+1. Logs in with the same credential loading rules
+2. Opens the debit-card bill detail query page
+3. Selects the requested bill month
+4. Clicks `查詢`
+5. Extracts the bill detail table headers and rows
+6. Prints JSON by default
+
+The `debit-card-bills` command:
+
+1. Logs in with the same credential loading rules
+2. Opens the debit-card bill detail query page
+3. Reads the available bill months
+4. Queries each month
+5. Extracts each bill's total amount without returning transaction details
 6. Prints JSON by default
 
 ## Safety
