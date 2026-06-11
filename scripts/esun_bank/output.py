@@ -9,10 +9,45 @@ def mask_account(account: str) -> str:
 
     if "X" in account.upper():
         return account
-    digits = "".join(ch for ch in account if ch.isdigit())
-    if len(digits) <= 4:
+    digit_count = sum(ch.isdigit() for ch in account)
+    if digit_count <= 4:
         return account
-    return "*" * (len(digits) - 4) + digits[-4:]
+
+    visible_from = digit_count - 4
+    seen_digits = 0
+    masked = []
+    for ch in account:
+        if not ch.isdigit():
+            masked.append(ch)
+            continue
+        if seen_digits < visible_from:
+            masked.append("*")
+        else:
+            masked.append(ch)
+        seen_digits += 1
+    return "".join(masked)
+
+
+def mask_sensitive_accounts(value: Any) -> Any:
+    """Recursively mask values under account/card-number-like keys."""
+
+    if isinstance(value, dict):
+        masked: dict[str, Any] = {}
+        for key, item in value.items():
+            key_text = str(key).lower()
+            if isinstance(item, str) and (
+                "account" in key_text
+                or "card_number" in key_text
+                or "帳號" in str(key)
+                or "卡號" in str(key)
+            ):
+                masked[key] = mask_account(item)
+            else:
+                masked[key] = mask_sensitive_accounts(item)
+        return masked
+    if isinstance(value, list):
+        return [mask_sensitive_accounts(item) for item in value]
+    return value
 
 
 def write_output(value: Any, output: str) -> None:

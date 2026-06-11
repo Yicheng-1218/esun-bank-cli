@@ -12,7 +12,7 @@ Use the bundled Python CLI for E.SUN Bank automation instead of re-creating brow
 - Python 3.10+
 - Playwright for Python
 - Browser binaries installed with `python -m playwright install chromium`
-- Credentials supplied at runtime
+- Credentials supplied at runtime on a trusted local machine only
 
 Install prerequisites on Linux, macOS, or Windows Git Bash:
 
@@ -36,10 +36,10 @@ The Python CLI uses Python Playwright for saved automation.
 The CLI loads credentials in this order:
 
 1. `--credentials-file <path>` when explicitly provided
-2. `credentials.json` next to `SKILL.md`
+2. `credentials.json` next to `SKILL.md` for personal local use only
 3. Environment variables
 
-Use `credentials.json` in the skill directory when you want automatic discovery:
+Do not place real credentials in a skill directory that will be zipped or shared. If you use a local credentials file, copy `credentials.example.json` and keep the real file private:
 
 ```json
 {
@@ -63,7 +63,7 @@ ESUN_USER=...
 ESUN_PASSWORD=...
 ```
 
-Do not store real credentials in `SKILL.md` or committed source. If using a credentials file, keep it local and pass it with `--credentials-file`.
+Do not store real credentials in `SKILL.md`, committed source, prompts, command-line arguments, or logs. The CLI does not support `--password`; use `ESUN_PASSWORD`, a private credentials file, or `--prompt-missing`. On Linux/macOS the credentials file must not be group/world-readable; use `chmod 600 credentials.json`. Before sharing a folder, run `find . -name "credentials.json" -o -name "*.env"`.
 
 ## CLI
 
@@ -89,10 +89,10 @@ python scripts/esun_bank_cli.py balance --output text
 python scripts/esun_bank_cli.py batch balance debit-card-bills --output text
 python scripts/esun_bank_cli.py credit-card-bills --output text
 python scripts/esun_bank_cli.py credit-card-bill-details --month 0115/04 --output text
-python scripts/esun_bank_cli.py credit-card-transactions --mask-accounts
+python scripts/esun_bank_cli.py credit-card-transactions --show-full-accounts
 python scripts/esun_bank_cli.py debit-card-bill-details --month 115/04 --output text
 python scripts/esun_bank_cli.py debit-card-bills --output text
-python scripts/esun_bank_cli.py debit-card-transactions --mask-accounts
+python scripts/esun_bank_cli.py debit-card-transactions --show-full-accounts
 ```
 
 Default mode is headless. Use `--headed` only when the user asks to see the browser.
@@ -172,4 +172,4 @@ The `batch` command:
 
 - Do not echo passwords or full credential sets in chat.
 - Do not write credentials into the skill source.
-- When reporting results, mask account numbers unless the user explicitly asks for full local output.
+- Account and card numbers are masked by default. Never add `--show-full-accounts` unless the user explicitly asks for full local output on a trusted terminal. Do not run this skill in cloud sandboxes, CI, remote containers, or untrusted hosts. This is not an official E.SUN Bank tool; users assume the risk of automating real internet banking. The CLI pins the E.SUN login URL and refuses non-E.SUN HTTPS hosts. By default, errors suppress logged-in page text; only use `--debug-page-text` for trusted local debugging because it may expose account or transaction data.

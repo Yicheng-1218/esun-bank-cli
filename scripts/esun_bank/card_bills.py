@@ -5,7 +5,8 @@ from typing import Any
 
 from playwright.async_api import Frame
 
-from .session import CliError, run_with_login
+from .output import mask_sensitive_accounts
+from .session import CliError, read_debug_page_text, run_with_login
 
 
 CREDIT_CARD_BILLS_TITLE = "信用卡帳單資訊"
@@ -65,7 +66,9 @@ async def extract_card_bills(frame: Frame) -> dict[str, Any]:
     }
 
 
-async def extract_card_bill_details(frame: Frame, month: str) -> dict[str, Any]:
+async def extract_card_bill_details(
+    frame: Frame, month: str, debug_page_text: bool = False
+) -> dict[str, Any]:
     """點選指定帳單月份的明細，並解析明細表格。"""
 
     result = await frame.evaluate(
@@ -136,23 +139,16 @@ async def extract_card_bill_details(frame: Frame, month: str) -> dict[str, Any]:
     try:
         await frame.locator(DETAIL_TABLE_SELECTOR).wait_for(timeout=10000)
     except Exception as exc:
-        message = await frame.evaluate(
-            """
-            () => {
-              const clean = text => (text || '').replace(/\\s+/g, ' ').trim();
-              const errorForm = document.forms['commonerror'];
-              if (errorForm) return clean(errorForm.innerText || document.body.innerText);
-              return clean(document.body.innerText);
-            }
-            """
-        )
-        if message:
-            raise CliError(
-                f"Credit card bill detail did not load for {month}: {message}"
-            ) from exc
-        raise CliError(
-            f"Credit card bill detail did not load for {month}."
-        ) from exc
+        message = f"Credit card bill detail did not load for {month}."
+        if debug_page_text:
+            page_text = await read_debug_page_text(frame)
+            message = f"{message} Page text: {page_text}"
+        else:
+            message = (
+                f"{message} Page text suppressed; re-run with --debug-page-text "
+                "only on a trusted local terminal."
+            )
+        raise CliError(message) from exc
     details = await frame.evaluate(
         """
         () => {
@@ -186,14 +182,22 @@ async def query_card_bills(args: argparse.Namespace, frame: Frame) -> dict[str, 
     """在已登入頁面上查詢信用卡帳單月份與總額。"""
 
     await open_card_bills_page(frame, args.timeout_ms)
-    return await extract_card_bills(frame)
+    result = await extract_card_bills(frame)
+    if not args.show_full_accounts:
+        return mask_sensitive_accounts(result)
+    return result
 
 
 async def query_card_bill_details(args: argparse.Namespace, frame: Frame) -> dict[str, Any]:
     """在已登入頁面上查詢指定月份信用卡帳單明細。"""
 
     await open_card_bills_page(frame, args.timeout_ms)
-    return await extract_card_bill_details(frame, args.month)
+    result = await extract_card_bill_details(
+        frame, args.month, args.debug_page_text
+    )
+    if not args.show_full_accounts:
+        return mask_sensitive_accounts(result)
+    return result
 
 
 async def run_card_bills(args: argparse.Namespace) -> dict[str, Any]:

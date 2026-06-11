@@ -4,6 +4,7 @@
 import argparse
 import asyncio
 import sys
+import traceback
 from typing import Any, Awaitable, Callable
 
 from esun_bank.balance import run_balance
@@ -22,9 +23,7 @@ from esun_bank.debit_card_transactions import query_debit_card_transactions
 from esun_bank.output import write_output
 from esun_bank.session import (
     DEFAULT_LOCK_FILE,
-    DEFAULT_URL,
     ENV_ID,
-    ENV_PASSWORD,
     ENV_USER,
     CliError,
     run_with_login,
@@ -34,14 +33,11 @@ CommandRunner = Callable[[argparse.Namespace], Awaitable[dict[str, Any]]]
 FrameCommand = Callable[[argparse.Namespace, Any], Awaitable[dict[str, Any]]]
 
 
-def add_common_options(command: argparse.ArgumentParser, mask_help: str) -> None:
+def add_common_options(command: argparse.ArgumentParser, _mask_help: str) -> None:
     """為子命令加入登入、瀏覽器與輸出相關共用參數。"""
 
-    command.add_argument("--url", default=DEFAULT_URL)
     command.add_argument("--id", help=f"Login ID. Prefer {ENV_ID}.")
     command.add_argument("--user", help=f"Login user name. Prefer {ENV_USER}.")
-    command.add_argument(
-        "--password", help=f"Login password. Prefer {ENV_PASSWORD}.")
     command.add_argument(
         "--credentials-file",
         help="Local JSON file with id, user, password. Defaults to skill-dir credentials.json when present.",
@@ -70,7 +66,17 @@ def add_common_options(command: argparse.ArgumentParser, mask_help: str) -> None
         help="Confirm E.SUN duplicate-login prompt and replace an active session.",
     )
     command.add_argument("--output", choices=["json", "text"], default="json")
-    command.add_argument("--mask-accounts", action="store_true", help=mask_help)
+    command.add_argument(
+        "--show-full-accounts",
+        action="store_true",
+        help="Show full account/card numbers. Use only on a trusted local terminal.",
+    )
+    command.add_argument(
+        "--debug-page-text",
+        action="store_true",
+        help="Include page text in selected load errors. May expose sensitive account data.",
+    )
+    command.add_argument("--debug", action="store_true", help="Print traceback details.")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -192,7 +198,14 @@ async def async_main(argv: list[str]) -> int:
         return 0
     except CliError as exc:
         print(f"error: {exc}", file=sys.stderr)
+        if args.debug:
+            traceback.print_exc()
         return 2
+    except Exception:
+        print("error: command failed. Re-run with --debug for details.", file=sys.stderr)
+        if args.debug:
+            traceback.print_exc()
+        return 1
 
 
 def main() -> int:

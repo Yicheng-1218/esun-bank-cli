@@ -89,7 +89,7 @@ async def query_debit_card_transactions(
     await frame.get_by_text("查詢時間：").wait_for(timeout=args.timeout_ms)
     result = await extract_debit_card_transactions(frame)
 
-    if args.mask_accounts:
+    if not args.show_full_accounts:
         for transaction in result["transactions"]:
             transaction["card_number"] = mask_account(transaction["card_number"])
     return result

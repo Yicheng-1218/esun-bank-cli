@@ -80,7 +80,7 @@ async def query_balance(args: argparse.Namespace, frame: Frame) -> dict[str, Any
 
     result = await extract_twd_balance(frame)
 
-    if args.mask_accounts:
+    if not args.show_full_accounts:
         for account in result["accounts"]:
             account["account"] = mask_account(account["account"])
     return result
