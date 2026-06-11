@@ -82,28 +82,31 @@ async def extract_card_transactions(frame: Frame) -> dict[str, Any]:
     }
 
 
-async def run_card_transactions(args: argparse.Namespace) -> dict[str, Any]:
-    """執行信用卡明細查詢命令並套用輸出遮罩選項。"""
+async def query_card_transactions(args: argparse.Namespace, frame: Frame) -> dict[str, Any]:
+    """在已登入頁面上查詢信用卡最近一個月明細。"""
 
-    async def query_recent_month(frame: Frame) -> dict[str, Any]:
-        await frame.locator("body").evaluate(
-            """
-            () => {
-              _leftMenuLoadWidget(window.event || null, 'FCM01004', 'FCM', 'MFCM0202');
-            }
-            """
-        )
-        await frame.locator("#FCM01004").get_by_text(
-            CREDIT_CARD_TRANSACTIONS_TITLE
-        ).wait_for(timeout=args.timeout_ms)
-        await frame.get_by_role("radio", name="最近一個月").click()
-        await frame.get_by_role("link", name="查詢").click()
-        await frame.get_by_text("查詢時間：").wait_for(timeout=args.timeout_ms)
-        return await extract_card_transactions(frame)
-
-    result = await run_with_login(args, query_recent_month)
+    await frame.locator("body").evaluate(
+        """
+        () => {
+          _leftMenuLoadWidget(window.event || null, 'FCM01004', 'FCM', 'MFCM0202');
+        }
+        """
+    )
+    await frame.locator("#FCM01004").get_by_text(
+        CREDIT_CARD_TRANSACTIONS_TITLE
+    ).wait_for(timeout=args.timeout_ms)
+    await frame.get_by_role("radio", name="最近一個月").click()
+    await frame.get_by_role("link", name="查詢").click()
+    await frame.get_by_text("查詢時間：").wait_for(timeout=args.timeout_ms)
+    result = await extract_card_transactions(frame)
 
     if args.mask_accounts:
         for transaction in result["transactions"]:
             transaction["card_number"] = mask_account(transaction["card_number"])
     return result
+
+
+async def run_card_transactions(args: argparse.Namespace) -> dict[str, Any]:
+    """執行信用卡明細查詢命令並套用輸出遮罩選項。"""
+
+    return await run_with_login(args, lambda frame: query_card_transactions(args, frame))

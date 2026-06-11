@@ -118,12 +118,19 @@ python scripts/esun_bank_cli.py credit-card-bills
 python scripts/esun_bank_cli.py credit-card-bill-details --month 0115/04
 ```
 
+一次登入後串行查詢多個項目：
+
+```bash
+python scripts/esun_bank_cli.py batch balance credit-card-bills credit-card-transactions
+```
+
 常用選項：
 
 ```bash
 python scripts/esun_bank_cli.py balance --output text
 python scripts/esun_bank_cli.py balance --headed
 python scripts/esun_bank_cli.py balance --credentials-file credentials.json
+python scripts/esun_bank_cli.py batch balance debit-card-bills --output text
 python scripts/esun_bank_cli.py credit-card-bills --output text
 python scripts/esun_bank_cli.py credit-card-bill-details --month 0115/04 --output text
 python scripts/esun_bank_cli.py credit-card-transactions --mask-accounts
@@ -133,6 +140,9 @@ python scripts/esun_bank_cli.py debit-card-bill-details --month 115/04 --output 
 ```
 
 預設為 headless 模式。只有在需要看見瀏覽器操作時才使用 `--headed`。
+CLI 會使用跨 process lock，避免多個命令同時登入造成登入競爭。若另一個 CLI 正在登入或查詢，後續命令預設最多等待 120 秒，可用 `--lock-timeout-ms` 調整。
+
+若銀行頁面提示已有其他登入 session，CLI 預設會停止，不會自動按「確定登入」踢掉既有 session。只有在確定要取代既有登入時才使用 `--force-login`。
 
 ## 安全注意事項
 

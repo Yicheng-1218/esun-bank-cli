@@ -75,12 +75,18 @@ async def extract_twd_balance(frame: Frame) -> dict[str, Any]:
     return data
 
 
-async def run_balance(args: argparse.Namespace) -> dict[str, Any]:
-    """執行餘額查詢命令並套用輸出遮罩選項。"""
+async def query_balance(args: argparse.Namespace, frame: Frame) -> dict[str, Any]:
+    """在已登入頁面上查詢餘額並套用輸出遮罩選項。"""
 
-    result = await run_with_login(args, extract_twd_balance)
+    result = await extract_twd_balance(frame)
 
     if args.mask_accounts:
         for account in result["accounts"]:
             account["account"] = mask_account(account["account"])
     return result
+
+
+async def run_balance(args: argparse.Namespace) -> dict[str, Any]:
+    """執行餘額查詢命令並套用輸出遮罩選項。"""
+
+    return await run_with_login(args, lambda frame: query_balance(args, frame))

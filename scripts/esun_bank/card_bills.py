@@ -182,21 +182,27 @@ async def extract_card_bill_details(frame: Frame, month: str) -> dict[str, Any]:
     }
 
 
+async def query_card_bills(args: argparse.Namespace, frame: Frame) -> dict[str, Any]:
+    """在已登入頁面上查詢信用卡帳單月份與總額。"""
+
+    await open_card_bills_page(frame, args.timeout_ms)
+    return await extract_card_bills(frame)
+
+
+async def query_card_bill_details(args: argparse.Namespace, frame: Frame) -> dict[str, Any]:
+    """在已登入頁面上查詢指定月份信用卡帳單明細。"""
+
+    await open_card_bills_page(frame, args.timeout_ms)
+    return await extract_card_bill_details(frame, args.month)
+
+
 async def run_card_bills(args: argparse.Namespace) -> dict[str, Any]:
     """執行信用卡帳單資訊查詢命令。"""
 
-    async def query_card_bills(frame: Frame) -> dict[str, Any]:
-        await open_card_bills_page(frame, args.timeout_ms)
-        return await extract_card_bills(frame)
-
-    return await run_with_login(args, query_card_bills)
+    return await run_with_login(args, lambda frame: query_card_bills(args, frame))
 
 
 async def run_card_bill_details(args: argparse.Namespace) -> dict[str, Any]:
     """執行指定月份信用卡帳單明細查詢命令。"""
 
-    async def query_card_bill_details(frame: Frame) -> dict[str, Any]:
-        await open_card_bills_page(frame, args.timeout_ms)
-        return await extract_card_bill_details(frame, args.month)
-
-    return await run_with_login(args, query_card_bill_details)
+    return await run_with_login(args, lambda frame: query_card_bill_details(args, frame))

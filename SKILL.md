@@ -74,6 +74,7 @@ python scripts/esun_bank_cli.py balance
 python scripts/esun_bank_cli.py credit-card-bills
 python scripts/esun_bank_cli.py credit-card-bill-details --month 0115/04
 python scripts/esun_bank_cli.py credit-card-transactions
+python scripts/esun_bank_cli.py batch balance credit-card-bills credit-card-transactions
 python scripts/esun_bank_cli.py debit-card-bill-details --month 115/04
 python scripts/esun_bank_cli.py debit-card-bills
 python scripts/esun_bank_cli.py debit-card-transactions
@@ -85,6 +86,7 @@ Useful options:
 python scripts/esun_bank_cli.py balance --headed
 python scripts/esun_bank_cli.py balance --credentials-file credentials.json
 python scripts/esun_bank_cli.py balance --output text
+python scripts/esun_bank_cli.py batch balance debit-card-bills --output text
 python scripts/esun_bank_cli.py credit-card-bills --output text
 python scripts/esun_bank_cli.py credit-card-bill-details --month 0115/04 --output text
 python scripts/esun_bank_cli.py credit-card-transactions --mask-accounts
@@ -95,6 +97,8 @@ python scripts/esun_bank_cli.py debit-card-transactions --mask-accounts
 
 Default mode is headless. Use `--headed` only when the user asks to see the browser.
 Each command attempts to log out before the browser is closed or the process exits.
+The CLI uses a cross-process session lock by default, so concurrent invocations wait instead of logging in at the same time. Prefer `batch` when multiple queries are needed in one user request.
+If E.SUN reports an existing active login session, the CLI stops by default. Use `--force-login` only when intentionally replacing that active session.
 
 The `balance` command:
 
@@ -156,6 +160,13 @@ The `debit-card-bills` command:
 4. Queries each month
 5. Extracts each bill's total amount without returning transaction details
 6. Prints JSON by default
+
+The `batch` command:
+
+1. Logs in once
+2. Runs the requested queries sequentially in the same browser session
+3. Logs out once
+4. Supports: `balance`, `credit-card-bills`, `credit-card-transactions`, `debit-card-bills`, `debit-card-transactions`
 
 ## Safety
 

@@ -7,17 +7,31 @@ import sys
 from typing import Any, Awaitable, Callable
 
 from esun_bank.balance import run_balance
+from esun_bank.balance import query_balance
 from esun_bank.card_bills import run_card_bill_details, run_card_bills
+from esun_bank.card_bills import query_card_bills
 from esun_bank.card_transactions import run_card_transactions
+from esun_bank.card_transactions import query_card_transactions
 from esun_bank.debit_card_bills import (
+    query_debit_card_bills,
     run_debit_card_bill_details,
     run_debit_card_bills,
 )
 from esun_bank.debit_card_transactions import run_debit_card_transactions
+from esun_bank.debit_card_transactions import query_debit_card_transactions
 from esun_bank.output import write_output
-from esun_bank.session import DEFAULT_URL, ENV_ID, ENV_PASSWORD, ENV_USER, CliError
+from esun_bank.session import (
+    DEFAULT_LOCK_FILE,
+    DEFAULT_URL,
+    ENV_ID,
+    ENV_PASSWORD,
+    ENV_USER,
+    CliError,
+    run_with_login,
+)
 
 CommandRunner = Callable[[argparse.Namespace], Awaitable[dict[str, Any]]]
+FrameCommand = Callable[[argparse.Namespace, Any], Awaitable[dict[str, Any]]]
 
 
 def add_common_options(command: argparse.ArgumentParser, mask_help: str) -> None:
@@ -39,6 +53,22 @@ def add_common_options(command: argparse.ArgumentParser, mask_help: str) -> None
     command.add_argument("--keep-open", action="store_true",
                          help="Keep browser open after command.")
     command.add_argument("--timeout-ms", type=int, default=30000)
+    command.add_argument(
+        "--lock-file",
+        default=str(DEFAULT_LOCK_FILE),
+        help="Cross-process session lock path.",
+    )
+    command.add_argument(
+        "--lock-timeout-ms",
+        type=int,
+        default=120000,
+        help="How long to wait for another CLI login to finish.",
+    )
+    command.add_argument(
+        "--force-login",
+        action="store_true",
+        help="Confirm E.SUN duplicate-login prompt and replace an active session.",
+    )
     command.add_argument("--output", choices=["json", "text"], default="json")
     command.add_argument("--mask-accounts", action="store_true", help=mask_help)
 
@@ -94,6 +124,23 @@ def build_parser() -> argparse.ArgumentParser:
     debit_card_bill_details.add_argument(
         "--month", required=True, help="Bill month to open, for example 115/04."
     )
+
+    batch = subparsers.add_parser(
+        "batch", help="Run multiple queries after one login"
+    )
+    add_common_options(batch, "Mask account or card numbers in output.")
+    batch.add_argument(
+        "queries",
+        nargs="+",
+        choices=[
+            "balance",
+            "credit-card-bills",
+            "credit-card-transactions",
+            "debit-card-bills",
+            "debit-card-transactions",
+        ],
+        help="Queries to run sequentially in one logged-in browser session.",
+    )
     return parser
 
 
@@ -107,6 +154,26 @@ COMMAND_RUNNERS: dict[str, CommandRunner] = {
     "debit-card-transactions": run_debit_card_transactions,
 }
 
+BATCH_QUERIES: dict[str, FrameCommand] = {
+    "balance": query_balance,
+    "credit-card-bills": query_card_bills,
+    "credit-card-transactions": query_card_transactions,
+    "debit-card-bills": query_debit_card_bills,
+    "debit-card-transactions": query_debit_card_transactions,
+}
+
+
+async def run_batch(args: argparse.Namespace) -> dict[str, Any]:
+    """一次登入後依序執行多個查詢。"""
+
+    async def query_all(frame: Any) -> dict[str, Any]:
+        results = {}
+        for query in args.queries:
+            results[query] = await BATCH_QUERIES[query](args, frame)
+        return {"title": "batch", "results": results}
+
+    return await run_with_login(args, query_all)
+
 
 async def async_main(argv: list[str]) -> int:
     """解析命令列參數、派發子命令並處理 CLI 錯誤。"""
@@ -115,7 +182,9 @@ async def async_main(argv: list[str]) -> int:
     args = parser.parse_args(argv)
 
     try:
-        runner = COMMAND_RUNNERS.get(args.command)
+        runner = (
+            run_batch if args.command == "batch" else COMMAND_RUNNERS.get(args.command)
+        )
         if not runner:
             raise CliError(f"Unknown command: {args.command}")
         result = await runner(args)

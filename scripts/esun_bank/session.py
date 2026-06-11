@@ -1,9 +1,11 @@
 """登入、登出與瀏覽器 session 共用流程。"""
 
 import argparse
+import asyncio
 import getpass
 import json
 import os
+import tempfile
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
@@ -18,6 +20,7 @@ SKILL_DIR = Path(__file__).resolve().parents[2]
 DEFAULT_CREDENTIALS_FILE = SKILL_DIR / "credentials.json"
 LOGIN_SUCCESS_TEXT = "登入成功"
 LOGOUT_SELECTOR = 'a.log_out, a[href="/fco/fco08002/logout"], a[href*="/fco/fco08002/logout"]'
+DEFAULT_LOCK_FILE = Path(tempfile.gettempdir()) / "esun-bank-cli-session.lock"
 
 CommandHandler = Callable[[Frame], Awaitable[dict[str, Any]]]
 
@@ -26,6 +29,72 @@ class CliError(RuntimeError):
     """CLI 可預期錯誤，用於輸出簡潔的使用者訊息。"""
 
     pass
+
+
+class SessionLock:
+    """跨 process 鎖，避免多個 CLI 同時登入同一個網銀帳號。"""
+
+    def __init__(self, path: Path, timeout_ms: int) -> None:
+        self.path = path
+        self.timeout_ms = timeout_ms
+        self.file = None
+
+    async def __aenter__(self) -> "SessionLock":
+        deadline = asyncio.get_running_loop().time() + self.timeout_ms / 1000
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.file = self.path.open("a+b")
+        while True:
+            if self._try_lock():
+                self.file.seek(0)
+                self.file.truncate()
+                self.file.write(str(os.getpid()).encode("ascii"))
+                self.file.flush()
+                return self
+            if asyncio.get_running_loop().time() >= deadline:
+                raise CliError(
+                    f"Timed out waiting for E.SUN session lock: {self.path}"
+                )
+            await asyncio.sleep(0.25)
+
+    async def __aexit__(self, exc_type: Any, exc: Any, tb: Any) -> None:
+        if not self.file:
+            return
+        try:
+            self._unlock()
+        finally:
+            self.file.close()
+            self.file = None
+
+    def _try_lock(self) -> bool:
+        self.file.seek(0)
+        if os.name == "nt":
+            import msvcrt
+
+            try:
+                msvcrt.locking(self.file.fileno(), msvcrt.LK_NBLCK, 1)
+                return True
+            except OSError:
+                return False
+
+        import fcntl
+
+        try:
+            fcntl.flock(self.file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return True
+        except OSError:
+            return False
+
+    def _unlock(self) -> None:
+        if os.name == "nt":
+            import msvcrt
+
+            self.file.seek(0)
+            msvcrt.locking(self.file.fileno(), msvcrt.LK_UNLCK, 1)
+            return
+
+        import fcntl
+
+        fcntl.flock(self.file.fileno(), fcntl.LOCK_UN)
 
 
 def load_credentials(args: argparse.Namespace) -> dict[str, str]:
@@ -82,7 +151,13 @@ async def get_main_frame(page: Page) -> Frame:
     return page
 
 
-async def login(page: Page, credentials: dict[str, str], url: str, timeout_ms: int) -> Any:
+async def login(
+    page: Page,
+    credentials: dict[str, str],
+    url: str,
+    timeout_ms: int,
+    force_login: bool,
+) -> Any:
     """開啟登入頁、填入憑證並等待登入成功。"""
 
     await page.goto(url, wait_until="networkidle", timeout=timeout_ms)
@@ -91,27 +166,33 @@ async def login(page: Page, credentials: dict[str, str], url: str, timeout_ms: i
     await frame.locator('[id="loginform:custid"]').fill(credentials["id"])
     await frame.locator('[id="loginform:name"]').fill(credentials["user"])
     await frame.locator('[id="loginform:pxsswd"]').fill(credentials["password"])
-    await complete_login(frame, timeout_ms)
+    await complete_login(frame, timeout_ms, force_login)
 
     return frame
 
 
-async def complete_login(frame: Frame, timeout_ms: int) -> None:
+async def complete_login(frame: Frame, timeout_ms: int, force_login: bool) -> None:
     """送出登入表單，並處理可能出現的重複登入確認。"""
 
     await frame.locator('[id="loginform:linkCommand"]').click()
-    await confirm_duplicate_login_if_present(frame)
+    await confirm_duplicate_login_if_present(frame, force_login)
     await wait_for_logged_in_home(frame, timeout_ms)
 
 
-async def confirm_duplicate_login_if_present(frame: Frame) -> None:
-    """若頁面出現重複登入確認按鈕，快速點選確認。"""
+async def confirm_duplicate_login_if_present(frame: Frame, force_login: bool) -> None:
+    """處理重複登入提示；預設不踢掉既有登入。"""
 
     confirm_button = frame.locator('button:has-text("確定登入")')
     try:
-        await confirm_button.click(timeout=1500)
+        await confirm_button.wait_for(timeout=1500)
     except Exception:
         return
+    if not force_login:
+        raise CliError(
+            "E.SUN reports another active login session. Re-run with --force-login "
+            "only if you intentionally want to replace it."
+        )
+    await confirm_button.click()
 
 
 async def wait_for_logged_in_home(frame: Frame, timeout_ms: int) -> None:
@@ -163,15 +244,19 @@ async def run_with_login(args: argparse.Namespace, handler: CommandHandler) -> d
             "python -m playwright install chromium"
         ) from exc
 
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=not args.headed)
-        page = await browser.new_page()
-        try:
-            frame = await login(page, credentials, args.url, args.timeout_ms)
-            result = await handler(frame)
-        finally:
-            await logout(page)
-            if not args.keep_open:
-                await browser.close()
+    lock = SessionLock(Path(args.lock_file), args.lock_timeout_ms)
+    async with lock:
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=not args.headed)
+            page = await browser.new_page()
+            try:
+                frame = await login(
+                    page, credentials, args.url, args.timeout_ms, args.force_login
+                )
+                result = await handler(frame)
+            finally:
+                await logout(page)
+                if not args.keep_open:
+                    await browser.close()
 
     return result

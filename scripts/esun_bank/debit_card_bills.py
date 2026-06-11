@@ -178,38 +178,48 @@ async def extract_debit_card_bill_summary(frame: Frame, month: str) -> dict[str,
     return summary
 
 
+async def query_debit_card_bills(args: argparse.Namespace, frame: Frame) -> dict[str, Any]:
+    """在已登入頁面上查詢簽帳金融卡帳單月份與總額。"""
+
+    await open_debit_card_bill_page(frame, args.timeout_ms)
+    months = await extract_debit_card_bill_months(frame)
+
+    bills = []
+    for month in months:
+        await open_debit_card_bill_page(frame, args.timeout_ms)
+        await query_debit_card_bill_month(
+            frame, month["statement_month"], args.timeout_ms
+        )
+        summary = await extract_debit_card_bill_summary(
+            frame, month["statement_month"]
+        )
+        bills.append({**month, **summary})
+
+    return {
+        "title": DEBIT_CARD_BILLS_TITLE,
+        "bills": bills,
+    }
+
+
+async def query_debit_card_bill_details(
+    args: argparse.Namespace, frame: Frame
+) -> dict[str, Any]:
+    """在已登入頁面上查詢指定月份簽帳金融卡帳單明細。"""
+
+    await open_debit_card_bill_page(frame, args.timeout_ms)
+    await query_debit_card_bill_month(frame, args.month, args.timeout_ms)
+    return await extract_debit_card_bill_details(frame, args.month)
+
+
 async def run_debit_card_bills(args: argparse.Namespace) -> dict[str, Any]:
     """執行簽帳金融卡帳單月份與總額查詢命令。"""
 
-    async def query_bills(frame: Frame) -> dict[str, Any]:
-        await open_debit_card_bill_page(frame, args.timeout_ms)
-        months = await extract_debit_card_bill_months(frame)
-
-        bills = []
-        for month in months:
-            await open_debit_card_bill_page(frame, args.timeout_ms)
-            await query_debit_card_bill_month(
-                frame, month["statement_month"], args.timeout_ms
-            )
-            summary = await extract_debit_card_bill_summary(
-                frame, month["statement_month"]
-            )
-            bills.append({**month, **summary})
-
-        return {
-            "title": DEBIT_CARD_BILLS_TITLE,
-            "bills": bills,
-        }
-
-    return await run_with_login(args, query_bills)
+    return await run_with_login(args, lambda frame: query_debit_card_bills(args, frame))
 
 
 async def run_debit_card_bill_details(args: argparse.Namespace) -> dict[str, Any]:
     """執行指定月份簽帳金融卡帳單明細查詢命令。"""
 
-    async def query_details(frame: Frame) -> dict[str, Any]:
-        await open_debit_card_bill_page(frame, args.timeout_ms)
-        await query_debit_card_bill_month(frame, args.month, args.timeout_ms)
-        return await extract_debit_card_bill_details(frame, args.month)
-
-    return await run_with_login(args, query_details)
+    return await run_with_login(
+        args, lambda frame: query_debit_card_bill_details(args, frame)
+    )
