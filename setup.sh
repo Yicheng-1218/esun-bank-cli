@@ -32,6 +32,14 @@ fi
 read -r -a PYTHON_CMD <<< "$PYTHON_BIN"
 echo "Using Python: $("${PYTHON_CMD[@]}" --version)"
 
+if ! "${PYTHON_CMD[@]}" -m pip --version >/dev/null 2>&1; then
+  VENV_DIR="$SCRIPT_DIR/.venv"
+  echo "Python pip is unavailable; creating virtual environment at $VENV_DIR"
+  "${PYTHON_CMD[@]}" -m venv "$VENV_DIR"
+  PYTHON_CMD=("$VENV_DIR/bin/python")
+  echo "Using virtualenv Python: $("${PYTHON_CMD[@]}" --version)"
+fi
+
 "${PYTHON_CMD[@]}" -m pip install -r "$SCRIPT_DIR/requirements.txt"
 "${PYTHON_CMD[@]}" -m playwright install chromium
 
