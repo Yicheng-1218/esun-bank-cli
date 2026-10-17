@@ -1,32 +1,50 @@
-# Security Policy
+# Security
 
-This is an unofficial local automation helper for E.SUN Bank internet banking. It handles real banking credentials and account, card, bill, and transaction data.
+## Credential
 
-## Safe Use
+正式 credential 只放：
 
-- Run only on a trusted local machine.
-- Do not run in cloud sandboxes, CI, remote containers, or shared hosts.
-- Do not put real credentials in prompts, source files, command-line arguments, logs, screenshots, or shared archives.
-- Prefer environment variables, `--prompt-missing`, or a private `--credentials-file` with owner-only permissions.
-- On Linux/macOS, use `chmod 600 credentials.json` for any credentials file.
-- Account and card numbers are masked by default. Use `--show-full-accounts` only when you explicitly need full local output on a trusted terminal.
-- `--debug-page-text` may expose logged-in page content. Use it only for trusted local debugging.
-
-## Before Sharing This Skill
-
-Run this check from the repository or skill directory and remove any real secrets before packaging:
-
-```bash
-find . -name "credentials.json" -o -name "*.env"
+```text
+~/.hermes/esun-bank/credentials.json
 ```
 
-## Reporting a Vulnerability
+所有 Hermes profile 共用，不再建立 profile-specific bank credential。
 
-Please report issues privately to the maintainer of the copy of this skill you are using. Include:
+POSIX：
 
-- The affected command or workflow.
-- The expected safe behavior.
-- The observed unsafe behavior.
-- Minimal reproduction steps that do not include real credentials or account data.
+- credential parent directory: 建議 `700`
+- credential file: 必須 `600`
 
-Do not include real IDs, user names, passwords, account numbers, card numbers, bills, or transaction details in reports.
+CLI 也接受顯式 `--credentials-file` / `ESUN_CREDENTIALS_FILE` 覆寫。
+
+禁止：
+
+- credential 放進 repository
+- credential 值輸出到 log / prompt / HAR
+- Authorization token 寫入 disk
+- raw banking payload commit 到 Git
+
+## Bank session
+
+銀行登入不是「零副作用」：登入會建立 / 取代 server-side session。
+
+因此：
+
+- 本機 CLI 使用 cross-process lock
+- 預設遇到 existing session 就停止
+- 只有 `--force-login` 才取代銀行既有 session
+- batch / all 只登入一次
+- ESB 主 tab 保留到最後；卡片 SSO 使用同 context 的獨立 tab
+- 正常或 exception 都 best-effort 執行 header「登出」→「立即登出」
+- 等待「重新登入」出現後才關閉 browser context
+- 最後一定 close Chromium 並釋放 process lock
+
+## Read-only boundary
+
+這個 repository 只允許讀取：
+
+- credit-card transactions
+- debit-card transactions
+- TWD account transactions
+
+不實作任何資金或帳戶設定 mutation。

@@ -1,175 +1,135 @@
 ---
 name: esun-bank-cli
-description: Use this skill when Codex needs to automate E.SUN Bank personal internet banking through the bundled Python CLI, including opening the login page, signing in, reading Taiwan-dollar balances, and querying recent credit-card transaction details. Requires Python and Playwright to be installed, including browser binaries. Credentials must be available to the CLI through environment variables or an explicit local credentials file in the skill directory; never hard-code real credentials in prompts or source files.
+description: Use for read-only E.SUN Bank transaction queries: recent credit-card, debit-card, and TWD account transactions. Browser-authenticated API client with unified schema and single-session batch support.
+metadata:
+  version: "3.0.0"
 ---
 
-# 玉山銀行 CLI
+# 玉山銀行 Browser API CLI
 
-Use the bundled Python CLI for E.SUN Bank automation instead of re-creating browser steps manually.
+這份 skill 已完成 v3 breaking rewrite。
 
-## Requirements
+舊版 iframe / DOM scraper、balance / bills / statement-month commands 不再是正式能力。不要重新走舊 selector。
 
-- Python 3.10+
-- Playwright for Python
-- Browser binaries installed with `python -m playwright install chromium`
-- Credentials supplied at runtime on a trusted local machine only
+## Credential
 
-Install prerequisites on Linux, macOS, or Windows Git Bash:
+所有 Hermes profile 共用唯一 credential：
 
-```bash
-bash setup.sh
+```text
+~/.hermes/esun-bank/credentials.json
 ```
 
-For Windows PowerShell users, use Git Bash to run `setup.sh` or ask Codex to translate the setup script to PowerShell.
+來源優先順序：
 
-Manual install:
+1. `--credentials-file`
+2. `ESUN_CREDENTIALS_FILE`
+3. `~/.hermes/esun-bank/credentials.json`
+4. `ESUN_ID` / `ESUN_USER` / `ESUN_PASSWORD`
+
+不得讀出、顯示或複製 credential 值。
+
+## Commands
 
 ```bash
-python -m pip install -r requirements.txt
-python -m playwright install chromium
+bash "$SKILL_DIR/scripts/run.sh" credit
+bash "$SKILL_DIR/scripts/run.sh" debit
+bash "$SKILL_DIR/scripts/run.sh" twd
+bash "$SKILL_DIR/scripts/run.sh" all
+bash "$SKILL_DIR/scripts/run.sh" batch twd credit
+bash "$SKILL_DIR/scripts/run.sh" batch credit debit
 ```
 
-The Python CLI uses Python Playwright for saved automation.
+所有 command 都是 read-only query。
 
-## Credentials
+`all` 與 `batch` 只登入一次。
 
-The CLI loads credentials in this order:
+## Existing bank session
 
-1. `--credentials-file <path>` when explicitly provided
-2. `credentials.json` next to `SKILL.md` for personal local use only
-3. Environment variables
+預設不搶既有 session。
 
-Do not place real credentials in a skill directory that will be zipped or shared. If you use a local credentials file, copy `credentials.example.json` and keep the real file private:
+如果銀行顯示「確定登入」：
+
+- 沒有 `--force-login` → CLI 停止
+- 有 `--force-login` → 才確認取代既有 session
+
+不要自動加 `--force-login`。
+
+## Unified schema
+
+所有 command 都輸出 v3 envelope：
+
+- `schema_version = "3.0"`
+- `period`
+- `requested_sources`
+- `accounts[]`
+- `transactions[]`
+- `summary`
+
+每筆 transaction 都有相同 keys：
+
+- `source`
+- `date`
+- `account_id`
+- `description`
+- `amount`
+- `original_amount`
+- `direction`
+- `direction_raw`
+- `status`
+- `balance_after`
+- `counterparty`
+- `metadata`
+
+source：
+
+- `credit_card`
+- `debit_card`
+- `twd_account`
+
+金額統一：
 
 ```json
-{
-  "id": "身分證字號或統一編號",
-  "user": "使用者名稱",
-  "password": "使用者密碼"
-}
+{"value": "1234.5", "currency": "TWD"}
 ```
 
-Expected path:
+未知或不適用欄位使用 null，不用 0 猜值。
 
-```bash
-~/.codex/skills/esun-bank-cli/credentials.json
-```
+## Session lifecycle
 
-Use environment variables when no credentials file exists:
+CLI 必須保留：
 
-```bash
-ESUN_ID=...
-ESUN_USER=...
-ESUN_PASSWORD=...
-```
+1. cross-process lock
+2. explicit browser context
+3. ESB primary tab login once
+4. TWD query on the primary ESB tab
+5. credit/debit query in a secondary card-SSO tab sharing the same context
+6. close the card tab
+7. normalize all requested sources
+8. finally perform the two-step header logout on the original ESB tab
+9. wait until 「重新登入」 is visible
+10. close context / Chromium
+11. release lock
 
-Do not store real credentials in `SKILL.md`, committed source, prompts, command-line arguments, or logs. The CLI does not support `--password`; use `ESUN_PASSWORD`, a private credentials file, or `--prompt-missing`. On Linux/macOS the credentials file must not be group/world-readable; use `chmod 600 credentials.json`. Before sharing a folder, run `find . -name "credentials.json" -o -name "*.env"`.
+即使 query exception，也要執行 cleanup。
 
-## CLI
+## 禁止能力
 
-Script:
+不可新增或呼叫：
 
-```bash
-python scripts/esun_bank_cli.py balance
-python scripts/esun_bank_cli.py credit-card-bills
-python scripts/esun_bank_cli.py credit-card-bill-details --month 0115/04
-python scripts/esun_bank_cli.py credit-card-transactions
-python scripts/esun_bank_cli.py batch balance credit-card-bills credit-card-transactions
-python scripts/esun_bank_cli.py debit-card-bill-details --month 115/04
-python scripts/esun_bank_cli.py debit-card-bills
-python scripts/esun_bank_cli.py debit-card-transactions
-```
+- 轉帳
+- 繳款
+- 受款人管理
+- 卡片管理
+- 密碼 / credential 變更
+- 任何資金或設定 mutation
 
-Useful options:
+## Implementation
 
-```bash
-python scripts/esun_bank_cli.py balance --headed
-python scripts/esun_bank_cli.py balance --credentials-file credentials.json
-python scripts/esun_bank_cli.py balance --output text
-python scripts/esun_bank_cli.py batch balance debit-card-bills --output text
-python scripts/esun_bank_cli.py credit-card-bills --output text
-python scripts/esun_bank_cli.py credit-card-bill-details --month 0115/04 --output text
-python scripts/esun_bank_cli.py credit-card-transactions --show-full-accounts
-python scripts/esun_bank_cli.py debit-card-bill-details --month 115/04 --output text
-python scripts/esun_bank_cli.py debit-card-bills --output text
-python scripts/esun_bank_cli.py debit-card-transactions --show-full-accounts
-```
+正式實作：
 
-Default mode is headless. Use `--headed` only when the user asks to see the browser.
-Each command attempts to log out before the browser is closed or the process exits.
-The CLI uses a cross-process session lock by default, so concurrent invocations wait instead of logging in at the same time. Prefer `batch` when multiple queries are needed in one user request.
-If E.SUN reports an existing active login session, the CLI stops by default. Use `--force-login` only when intentionally replacing that active session.
+- `scripts/esun_bank/session.py`
+- `scripts/esun_bank/client.py`
+- `scripts/esun_bank/schema.py`
+- `scripts/esun_bank_cli.py`
 
-The `balance` command:
-
-1. Opens `https://ebank.esunbank.com.tw/index.jsp`
-2. Fills the ID, user name, and password fields
-3. Clicks login
-4. Waits for `臺幣帳戶總覽`
-5. Extracts Taiwan-dollar account rows and total balance
-6. Prints JSON by default
-
-The `credit-card-transactions` command:
-
-1. Logs in with the same credential loading rules
-2. Opens the credit-card transaction query page
-3. Selects `最近一個月`
-4. Clicks `查詢`
-5. Extracts query period, sort mode, transaction rows, and subtotals
-6. Prints JSON by default
-
-The `credit-card-bills` command:
-
-1. Logs in with the same credential loading rules
-2. Opens the credit-card bill information page
-3. Extracts bill months and total amounts
-4. Prints JSON by default
-
-The `credit-card-bill-details` command:
-
-1. Logs in with the same credential loading rules
-2. Opens the credit-card bill information page
-3. Finds the requested bill month
-4. Clicks that row's detail link
-5. Extracts the detail table headers and rows
-6. Prints JSON by default
-
-The `debit-card-transactions` command:
-
-1. Logs in with the same credential loading rules
-2. Opens the debit-card transaction query page
-3. Selects `最近一個月`
-4. Clicks `查詢`
-5. Extracts query period, sort mode, and transaction rows
-6. Prints JSON by default
-
-The `debit-card-bill-details` command:
-
-1. Logs in with the same credential loading rules
-2. Opens the debit-card bill detail query page
-3. Selects the requested bill month
-4. Clicks `查詢`
-5. Extracts the bill detail table headers and rows
-6. Prints JSON by default
-
-The `debit-card-bills` command:
-
-1. Logs in with the same credential loading rules
-2. Opens the debit-card bill detail query page
-3. Reads the available bill months
-4. Queries each month
-5. Extracts each bill's total amount without returning transaction details
-6. Prints JSON by default
-
-The `batch` command:
-
-1. Logs in once
-2. Runs the requested queries sequentially in the same browser session
-3. Logs out once
-4. Supports: `balance`, `credit-card-bills`, `credit-card-transactions`, `debit-card-bills`, `debit-card-transactions`
-
-## Safety
-
-- Do not echo passwords or full credential sets in chat.
-- Do not write credentials into the skill source.
-- Account and card numbers are masked by default. Never add `--show-full-accounts` unless the user explicitly asks for full local output on a trusted terminal. Do not run this skill in untrusted hosts. This is not an official E.SUN Bank tool; users assume the risk of automating real internet banking. The CLI pins the E.SUN login URL and refuses non-E.SUN HTTPS hosts. By default, errors suppress logged-in page text; only use `--debug-page-text` for trusted local debugging because it may expose account or transaction data.
+舊 module filenames 若仍存在，只是 migration tombstone，不是可用 API。

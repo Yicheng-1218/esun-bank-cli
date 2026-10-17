@@ -1,200 +1,164 @@
 #!/usr/bin/env python3
-"""CLI helpers for E.SUN Bank internet banking automation."""
+"""Read-only E.SUN Bank browser API CLI."""
+from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import sys
 import traceback
-from typing import Any, Awaitable, Callable
+from pathlib import Path
+from typing import Any
 
-from esun_bank.balance import run_balance
-from esun_bank.balance import query_balance
-from esun_bank.card_bills import run_card_bill_details, run_card_bills
-from esun_bank.card_bills import query_card_bills
-from esun_bank.card_transactions import run_card_transactions
-from esun_bank.card_transactions import query_card_transactions
-from esun_bank.debit_card_bills import (
-    query_debit_card_bills,
-    run_debit_card_bill_details,
-    run_debit_card_bills,
-)
-from esun_bank.debit_card_transactions import run_debit_card_transactions
-from esun_bank.debit_card_transactions import query_debit_card_transactions
-from esun_bank.output import write_output
+from esun_bank.client import fetch_card_payloads, fetch_twd_payload
+from esun_bank.schema import normalize
 from esun_bank.session import (
     DEFAULT_LOCK_FILE,
-    ENV_ID,
-    ENV_USER,
     CliError,
-    run_with_login,
+    SessionLock,
+    login,
+    logout,
 )
 
-CommandRunner = Callable[[argparse.Namespace], Awaitable[dict[str, Any]]]
-FrameCommand = Callable[[argparse.Namespace, Any], Awaitable[dict[str, Any]]]
+SOURCE_CHOICES = ("credit", "debit", "twd")
 
 
-def add_common_options(command: argparse.ArgumentParser, _mask_help: str) -> None:
-    """為子命令加入登入、瀏覽器與輸出相關共用參數。"""
-
-    command.add_argument("--id", help=f"Login ID. Prefer {ENV_ID}.")
-    command.add_argument("--user", help=f"Login user name. Prefer {ENV_USER}.")
-    command.add_argument(
+def add_common_options(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
         "--credentials-file",
-        help="Local JSON file with id, user, password. Defaults to skill-dir credentials.json when present.",
+        help=(
+            "Private JSON file with id, user, password. "
+            "Default: ~/.hermes/esun-bank/credentials.json"
+        ),
     )
-    command.add_argument("--prompt-missing", action="store_true",
-                         help="Prompt for missing credentials.")
-    command.add_argument("--headed", "--head", action="store_true",
-                         help="Show browser window. Default is headless.")
-    command.add_argument("--keep-open", action="store_true",
-                         help="Keep browser open after command.")
-    command.add_argument("--timeout-ms", type=int, default=30000)
-    command.add_argument(
+    parser.add_argument(
+        "--force-login",
+        action="store_true",
+        help="Replace an existing E.SUN login session if the bank prompts for confirmation.",
+    )
+    parser.add_argument("--timeout-ms", type=int, default=30_000)
+    parser.add_argument(
         "--lock-file",
         default=str(DEFAULT_LOCK_FILE),
         help="Cross-process session lock path.",
     )
-    command.add_argument(
+    parser.add_argument(
         "--lock-timeout-ms",
         type=int,
-        default=120000,
-        help="How long to wait for another CLI login to finish.",
+        default=120_000,
+        help="How long to wait for another CLI process to release the bank session lock.",
     )
-    command.add_argument(
-        "--force-login",
+    parser.add_argument(
+        "--debug",
         action="store_true",
-        help="Confirm E.SUN duplicate-login prompt and replace an active session.",
+        help="Print traceback on failure.",
     )
-    command.add_argument("--output", choices=["json", "text"], default="json")
-    command.add_argument(
-        "--show-full-accounts",
+    parser.add_argument(
+        "--prompt-missing",
         action="store_true",
-        help="Show full account/card numbers. Use only on a trusted local terminal.",
+        help="Prompt locally for missing credentials.",
     )
-    command.add_argument(
-        "--debug-page-text",
-        action="store_true",
-        help="Include page text in selected load errors. May expose sensitive account data.",
-    )
-    command.add_argument("--debug", action="store_true", help="Print traceback details.")
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """建立 CLI 參數解析器。"""
-
     parser = argparse.ArgumentParser(
-        description="E.SUN Bank internet banking CLI")
-    subparsers = parser.add_subparsers(dest="command", required=True)
-
-    balance = subparsers.add_parser(
-        "balance", help="Get Taiwan-dollar account balances")
-    add_common_options(balance, "Mask account numbers in output.")
-
-    credit_card_transactions = subparsers.add_parser(
-        "credit-card-transactions",
-        help="Get recent-month credit card transactions",
+        description="Read-only E.SUN Bank browser API CLI"
     )
-    add_common_options(credit_card_transactions, "Mask card numbers in output.")
+    sub = parser.add_subparsers(dest="command", required=True)
 
-    credit_card_bills = subparsers.add_parser(
-        "credit-card-bills",
-        help="Get credit card bill months and total amounts",
-    )
-    add_common_options(credit_card_bills, "Mask account numbers in output.")
+    for name, help_text in (
+        ("credit", "Query recent one-month credit-card transactions"),
+        ("debit", "Query recent one-month debit-card transactions"),
+        ("twd", "Query recent one-month TWD account transactions"),
+        ("all", "Query all supported sources in one login session"),
+    ):
+        cmd = sub.add_parser(name, help=help_text)
+        add_common_options(cmd)
 
-    credit_card_bill_details = subparsers.add_parser(
-        "credit-card-bill-details",
-        help="Get details for one credit card bill month",
+    batch = sub.add_parser(
+        "batch",
+        help="Query any combination of supported sources in one login session",
     )
-    add_common_options(credit_card_bill_details, "Mask account numbers in output.")
-    credit_card_bill_details.add_argument(
-        "--month", required=True, help="Bill month to open, for example 0115/04.")
-
-    debit_card_transactions = subparsers.add_parser(
-        "debit-card-transactions",
-        help="Get recent-month debit card transactions",
-    )
-    add_common_options(debit_card_transactions, "Mask card numbers in output.")
-
-    debit_card_bills = subparsers.add_parser(
-        "debit-card-bills",
-        help="Get debit card bill months and total amounts",
-    )
-    add_common_options(debit_card_bills, "Mask card numbers in output.")
-
-    debit_card_bill_details = subparsers.add_parser(
-        "debit-card-bill-details",
-        help="Get details for one debit card bill month",
-    )
-    add_common_options(debit_card_bill_details, "Mask card numbers in output.")
-    debit_card_bill_details.add_argument(
-        "--month", required=True, help="Bill month to open, for example 115/04."
-    )
-
-    batch = subparsers.add_parser(
-        "batch", help="Run multiple queries after one login"
-    )
-    add_common_options(batch, "Mask account or card numbers in output.")
+    add_common_options(batch)
     batch.add_argument(
-        "queries",
+        "sources",
         nargs="+",
-        choices=[
-            "balance",
-            "credit-card-bills",
-            "credit-card-transactions",
-            "debit-card-bills",
-            "debit-card-transactions",
-        ],
-        help="Queries to run sequentially in one logged-in browser session.",
+        choices=SOURCE_CHOICES,
+        help="Any subset of: credit debit twd",
     )
     return parser
 
 
-COMMAND_RUNNERS: dict[str, CommandRunner] = {
-    "balance": run_balance,
-    "credit-card-bill-details": run_card_bill_details,
-    "credit-card-bills": run_card_bills,
-    "credit-card-transactions": run_card_transactions,
-    "debit-card-bill-details": run_debit_card_bill_details,
-    "debit-card-bills": run_debit_card_bills,
-    "debit-card-transactions": run_debit_card_transactions,
-}
-
-BATCH_QUERIES: dict[str, FrameCommand] = {
-    "balance": query_balance,
-    "credit-card-bills": query_card_bills,
-    "credit-card-transactions": query_card_transactions,
-    "debit-card-bills": query_debit_card_bills,
-    "debit-card-transactions": query_debit_card_transactions,
-}
+def resolve_sources(args: argparse.Namespace) -> list[str]:
+    if args.command == "all":
+        return ["twd", "credit", "debit"]
+    if args.command == "batch":
+        requested = set(args.sources)
+        return [source for source in ("twd", "credit", "debit") if source in requested]
+    return [args.command]
 
 
-async def run_batch(args: argparse.Namespace) -> dict[str, Any]:
-    """一次登入後依序執行多個查詢。"""
+async def execute(args: argparse.Namespace) -> dict[str, Any]:
+    from playwright.async_api import async_playwright
 
-    async def query_all(frame: Any) -> dict[str, Any]:
-        results = {}
-        for query in args.queries:
-            results[query] = await BATCH_QUERIES[query](args, frame)
-        return {"title": "batch", "results": results}
+    requested = resolve_sources(args)
+    lock = SessionLock(Path(args.lock_file), args.lock_timeout_ms)
 
-    return await run_with_login(args, query_all)
+    async with lock:
+        async with async_playwright() as playwright:
+            browser = await playwright.chromium.launch(headless=True)
+            context = await browser.new_context()
+            page = await context.new_page()
+            page.set_default_timeout(min(args.timeout_ms, 10_000))
+            logged_in = False
+
+            try:
+                await login(page, args)
+                logged_in = True
+
+                twd_payload = None
+                card_payloads: dict[str, dict[str, Any]] = {}
+
+                # TWD first. Card SSO switches origin to iesc.esunbank.com and
+                # returning to the ESB SPA is less reliable than querying ESB first.
+                if "twd" in requested:
+                    twd_payload = await fetch_twd_payload(page)
+
+                card_sources = {source for source in requested if source in {"credit", "debit"}}
+                if card_sources:
+                    card_page = await page.context.new_page()
+                    try:
+                        card_payloads = await fetch_card_payloads(card_page, card_sources)
+                    finally:
+                        await card_page.close()
+
+                return normalize(
+                    requested=requested,
+                    card_payloads=card_payloads,
+                    twd_payload=twd_payload,
+                )
+            finally:
+                if logged_in:
+                    try:
+                        await logout(page)
+                    except Exception:
+                        pass
+                await context.close()
+                await browser.close()
 
 
 async def async_main(argv: list[str]) -> int:
-    """解析命令列參數、派發子命令並處理 CLI 錯誤。"""
-
     parser = build_parser()
     args = parser.parse_args(argv)
 
+    if args.timeout_ms < 1:
+        parser.error("--timeout-ms must be positive")
+    if args.lock_timeout_ms < 1:
+        parser.error("--lock-timeout-ms must be positive")
+
     try:
-        runner = (
-            run_batch if args.command == "batch" else COMMAND_RUNNERS.get(args.command)
-        )
-        if not runner:
-            raise CliError(f"Unknown command: {args.command}")
-        result = await runner(args)
-        write_output(result, args.output)
+        result = await execute(args)
+        print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0
     except CliError as exc:
         print(f"error: {exc}", file=sys.stderr)
@@ -209,8 +173,6 @@ async def async_main(argv: list[str]) -> int:
 
 
 def main() -> int:
-    """同步入口點。"""
-
     return asyncio.run(async_main(sys.argv[1:]))
 
 

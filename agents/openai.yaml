@@ -1,4 +1,4 @@
 interface:
-  display_name: "玉山銀行 CLI"
-  short_description: "使用 Python Playwright 自動登入玉山網銀並擷取帳戶資訊。"
-  default_prompt: "先提醒使用者此工具會操作真實網銀且預設遮蔽敏感資料；只在可信任本機使用玉山銀行 CLI 查詢帳戶資訊。"
+  display_name: "玉山銀行 Browser API CLI"
+  short_description: "使用 Playwright 登入玉山網銀，透過 browser-authenticated JSON API 查詢近一月交易。"
+  default_prompt: "只執行唯讀帳務查詢；優先使用 batch，一次登入取得信用卡、簽帳金融卡與臺幣帳戶交易，輸出 v3 統一 schema。"

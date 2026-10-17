@@ -1,164 +1,170 @@
-# 玉山銀行 CLI Skill
+# esun-bank-cli
 
-這是一個給 Agent 使用的自訂 skill，透過 Python Playwright 自動操作玉山銀行個人網路銀行，提供帳戶餘額查詢、信用卡帳單查詢、信用卡交易查詢與簽帳金融卡交易查詢的 CLI 工具。
+玉山個人網銀的唯讀 Browser API CLI。
 
-## 功能
+這個 repository 已在 2026-09-29 進行 breaking rewrite。舊版 iframe / DOM scraper、帳單查詢與相容 schema 不再是正式實作；目前只保留三個需求：
 
-- 登入玉山銀行個人網路銀行
-- 查詢臺幣帳戶總覽與總餘額
-- 查詢信用卡帳單月份與總額
-- 查詢最近一個月信用卡交易明細
-- 查詢最近一個月簽帳金融卡交易明細
-- 支援 JSON 與純文字輸出
-- 預設遮蔽帳號或卡號輸出；只有明確使用 `--show-full-accounts` 才顯示完整號碼
-- 可透過環境變數或明確指定的本機憑證檔提供登入資訊
+- 近一月信用卡消費紀錄
+- 近一月簽帳金融卡消費紀錄
+- 近一月臺幣帳戶交易明細
 
-## 專案結構
+## 架構
+
+登入仍由 Playwright 操作玉山新版網銀登入頁。登入成功後，不再逐頁 scrape 交易表格，而是沿用 browser session 呼叫網站自己的 JSON API。
+
+### 信用卡 / 簽帳卡
+
+1. 登入玉山個人網銀。
+2. 進入卡片 SSO。
+3. 從 browser session 取得短效 access token。
+4. Browser-context fetch：
+   - credit: `/GW/creditLastYear/getFilterResult`
+   - debit: `/GW/debitLastYear/getFilterResult`
+5. 正規化成共同 transaction schema，只保留近一月。
+
+### 臺幣帳戶
+
+1. 登入後呼叫網站既有 `goMibTask('ctw01002-tw-home')`。
+2. 接收交易明細 JSON response。
+3. 正規化成共同 transaction schema，只保留近一月。
+
+## Credential
+
+只保留一份 account-level credential：
 
 ```text
-.
-├── SKILL.md              # skill 入口與操作指引
-├── agents/openai.yaml    # Codex 顯示名稱與預設提示
-├── scripts/              # Python CLI 與銀行自動化流程
-├── requirements.txt      # Python 套件需求
-├── credentials.example.json # 憑證檔範例，請勿填入真實資料後分享
-├── setup.sh              # 安裝依賴與 Playwright Chromium
-├── SECURITY.md           # 安全使用與漏洞回報指南
-└── LICENSE
+~/.hermes/esun-bank/credentials.json
 ```
 
-## 安裝
+所有 Hermes profile 共用它。
 
-需求：
+預設 precedence：
 
-- Python 3.10+
-- Playwright for Python
-- Playwright Chromium browser binaries
+1. `--credentials-file`
+2. `ESUN_CREDENTIALS_FILE`
+3. `~/.hermes/esun-bank/credentials.json`
+4. `ESUN_ID` / `ESUN_USER` / `ESUN_PASSWORD`
 
-安裝依賴：
+credential file 在 POSIX 必須是 `600`。
+
+## CLI
+
+先 setup：
 
 ```bash
 bash setup.sh
 ```
 
-或手動安裝：
+單一來源：
 
 ```bash
-python -m pip install -r requirements.txt
-python -m playwright install chromium
+bash scripts/run.sh credit
+bash scripts/run.sh debit
+bash scripts/run.sh twd
 ```
 
-## 憑證設定
+全部一次查：
 
-CLI 會依序讀取：
+```bash
+bash scripts/run.sh all
+```
 
-1. `--credentials-file <path>`
-2. skill 目錄旁的 `credentials.json`（僅供個人本機使用，不建議放進準備分享的 skill 目錄）
-3. 環境變數
+任意 batch：
 
-CLI 不接受 `--password`，避免密碼出現在 shell history、process list、CI log 或 Agent trace。Linux/macOS 上，憑證檔若可被 group/world 讀取會被拒絕；請使用 `chmod 600 credentials.json`。
+```bash
+bash scripts/run.sh batch twd credit
+bash scripts/run.sh batch credit debit
+```
 
-可複製 `credentials.example.json` 建立本機 `credentials.json`，格式如下：
+batch / all 都只登入一次。
+
+若玉山偵測到已有登入 session，預設停止，不自行搶 session。只有你明確要取代時：
+
+```bash
+bash scripts/run.sh all --force-login
+```
+
+## 統一輸出
+
+所有 command 都輸出相同 envelope：
 
 ```json
 {
-  "id": "身分證字號或統一編號",
-  "user": "使用者名稱",
-  "password": "使用者密碼"
+  "schema_version": "3.0",
+  "period": {
+    "start": "YYYY-MM-DD",
+    "end": "YYYY-MM-DD"
+  },
+  "requested_sources": [
+    "twd_account",
+    "credit_card",
+    "debit_card"
+  ],
+  "accounts": [],
+  "transactions": [],
+  "summary": {
+    "account_count": 0,
+    "transaction_count": 0,
+    "transactions_by_source": {}
+  }
 }
 ```
 
-也可以使用環境變數：
+每筆 transaction 都使用同一組欄位：
 
-```bash
-ESUN_ID=...
-ESUN_USER=...
-ESUN_PASSWORD=...
+- `source`
+- `date`
+- `account_id`
+- `description`
+- `amount`
+- `original_amount`
+- `direction`
+- `direction_raw`
+- `status`
+- `balance_after`
+- `counterparty`
+- `metadata`
+
+帳號與卡號預設遮罩。
+
+## Session lifecycle
+
+每次 command：
+
+```text
+acquire process lock
+  → launch Chromium + explicit browser context
+  → ESB 主 tab login once
+  → TWD query on ESB 主 tab
+  → card query on a secondary SSO tab in the same context
+  → close card tab
+  → normalize output
+  → finally: ESB 主 tab header logout + confirm
+  → wait until 「重新登入」
+  → close context / Chromium
+  → release lock
 ```
 
-請勿將真實憑證提交到 Git。此專案的 `.gitignore` 已排除 `credentials.json`、`*.local.json` 與 `*.env`。如果要壓縮或分享資料夾，請先檢查是否誤包憑證：
+即使查詢中途丟 exception，也會走 `finally` 嘗試 logout 並關閉 browser。
 
-```bash
-find . -name "credentials.json" -o -name "*.env"
-```
+## 安全邊界
 
-## 使用方式
+- read-only query only
+- 不實作轉帳、繳款、卡片設定、受款人維護或帳戶設定
+- 不輸出 credential
+- 不輸出 Authorization token
+- 不把 raw banking payload / HAR commit 進 repo
+- 跨 process lock 避免兩個 CLI 同時登入同一帳號
 
-查詢臺幣帳戶餘額：
+## 驗證
 
-```bash
-python scripts/esun_bank_cli.py balance
-```
+VPS headless Chromium 曾實測完整 `all` 成功：
 
-查詢最近一個月信用卡交易：
+- 臺幣帳戶 1 個
+- 近一月臺幣交易 41 筆
+- 信用卡 2 張
+- 近一月信用卡交易 22 筆
+- 簽帳金融卡 1 張
+- 近一月簽帳交易 21 筆
 
-```bash
-python scripts/esun_bank_cli.py credit-card-transactions
-```
-
-查詢最近一個月簽帳金融卡交易：
-
-```bash
-python scripts/esun_bank_cli.py debit-card-transactions
-```
-
-查詢指定月份簽帳金融卡帳單明細：
-
-```bash
-python scripts/esun_bank_cli.py debit-card-bill-details --month 115/04
-```
-
-查詢簽帳金融卡帳單月份與總額：
-
-```bash
-python scripts/esun_bank_cli.py debit-card-bills
-```
-
-查詢信用卡帳單月份與應繳總金額：
-
-```bash
-python scripts/esun_bank_cli.py credit-card-bills
-```
-
-查詢指定月份信用卡帳單明細：
-
-```bash
-python scripts/esun_bank_cli.py credit-card-bill-details --month 0115/04
-```
-
-一次登入後串行查詢多個項目：
-
-```bash
-python scripts/esun_bank_cli.py batch balance credit-card-bills credit-card-transactions
-```
-
-常用選項：
-
-```bash
-python scripts/esun_bank_cli.py balance --output text
-python scripts/esun_bank_cli.py balance --headed
-python scripts/esun_bank_cli.py balance --credentials-file credentials.json
-python scripts/esun_bank_cli.py batch balance debit-card-bills --output text
-python scripts/esun_bank_cli.py credit-card-bills --output text
-python scripts/esun_bank_cli.py credit-card-bill-details --month 0115/04 --output text
-python scripts/esun_bank_cli.py credit-card-transactions --show-full-accounts
-python scripts/esun_bank_cli.py debit-card-transactions --show-full-accounts
-python scripts/esun_bank_cli.py debit-card-bills --output text
-python scripts/esun_bank_cli.py debit-card-bill-details --month 115/04 --output text
-```
-
-預設為 headless 模式。只有在需要看見瀏覽器操作時才使用 `--headed`。
-CLI 會使用跨 process lock，避免多個命令同時登入造成登入競爭。若另一個 CLI 正在登入或查詢，後續命令預設最多等待 120 秒，可用 `--lock-timeout-ms` 調整。
-
-若銀行頁面提示已有其他登入 session，CLI 預設會停止，不會自動按「確定登入」踢掉既有 session。只有在確定要取代既有登入時才使用 `--force-login`。
-
-## 安全注意事項
-
-- 這不是玉山銀行官方工具；會自動操作真實網銀頁面，使用者需自行承擔網銀自動化風險。
-- 只能在可信任的本機環境執行；不要在雲端 sandbox、CI、遠端容器或不受信任主機執行。
-- 不要在聊天內容、README、SKILL.md、原始碼、命令列參數或 log 中寫入真實密碼。
-- CLI 已固定使用 `https://ebank.esunbank.com.tw/index.jsp`，並拒絕把憑證送往非玉山網銀 HTTPS host。
-- 帳號與卡號預設遮蔽；只有在可信任本機終端機且使用者明確需要時，才使用 `--show-full-accounts`。
-- 預設錯誤訊息不輸出登入後頁面全文；`--debug-page-text` 可能暴露敏感帳務資料，只能在可信任本機除錯時使用。
-- 詳細安全使用與漏洞回報方式請見 `SECURITY.md`。
-- 使用完畢後，CLI 會嘗試登出並關閉瀏覽器。
+資料筆數會隨實際交易變動。

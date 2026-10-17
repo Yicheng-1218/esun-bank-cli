@@ -1,1 +1,1 @@
-"""E.SUN Bank CLI command modules."""
+"""E.SUN Bank browser API CLI internals."""
