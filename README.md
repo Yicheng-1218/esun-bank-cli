@@ -12,6 +12,10 @@
 
 由 Playwright 操作玉山網銀登入頁，登入後透過同一個 browser context 使用網站既有的 JSON API，不依賴交易表格 DOM。**目前不是純 HTTP CLI：登入、SSO token、TWD response 監聽及登出仍依賴 Playwright / Chromium。** 舊版 iframe / DOM scraper 與帳單、餘額等指令已移除。
 
+已另行驗證「不使用瀏覽器的匿名 HTTP 初始化」可行，參見
+[`references/http-only-feasibility.md`](references/http-only-feasibility.md)。
+這**不代表**已能純 HTTP 登入或查詢交易；正式 CLI 仍保留 Playwright。
+
 ### 信用卡 / 簽帳卡
 
 1. 登入玉山個人網銀。
