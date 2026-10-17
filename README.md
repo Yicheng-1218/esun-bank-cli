@@ -2,7 +2,7 @@
 
 玉山個人網銀的唯讀 Browser API CLI。
 
-這個 repository 已在 2026-09-29 進行 breaking rewrite。舊版 iframe / DOM scraper、帳單查詢與相容 schema 不再是正式實作；目前只保留三個需求：
+目前維護 v3 API 實作，只提供三種交易查詢：
 
 - 近一月信用卡消費紀錄
 - 近一月簽帳金融卡消費紀錄
@@ -10,7 +10,7 @@
 
 ## 架構
 
-登入仍由 Playwright 操作玉山新版網銀登入頁。登入成功後，不再逐頁 scrape 交易表格，而是沿用 browser session 呼叫網站自己的 JSON API。
+由 Playwright 操作玉山網銀登入頁，登入後透過同一個 browser context 使用網站既有的 JSON API，不依賴交易表格 DOM。**目前不是純 HTTP CLI：登入、SSO token、TWD response 監聽及登出仍依賴 Playwright / Chromium。** 舊版 iframe / DOM scraper 與帳單、餘額等指令已移除。
 
 ### 信用卡 / 簽帳卡
 
@@ -38,18 +38,18 @@
 
 所有 Hermes profile 共用它。
 
-預設 precedence：
+憑證檔案選擇順序：
 
 1. `--credentials-file`
 2. `ESUN_CREDENTIALS_FILE`
 3. `~/.hermes/esun-bank/credentials.json`
-4. `ESUN_ID` / `ESUN_USER` / `ESUN_PASSWORD`
+如果選定的憑證檔案缺少欄位，會以 `ESUN_ID` / `ESUN_USER` / `ESUN_PASSWORD` 補足；如果沒有選定任何憑證檔案，也可以只使用這三個環境變數。指定檔案不存在時會報錯，不會偷偷改用其他檔案。
 
-credential file 在 POSIX 必須是 `600`。
+credential file 在 POSIX 必須是 `600`。請參考 `credentials.example.json` 的欄位格式，但不要把真實憑證放入 repository。
 
 ## CLI
 
-先 setup：
+需要 Python 3.10+、Bash 與可安裝 Chromium 的執行環境。依賴列於 `requirements.txt`（目前是 Playwright）；`setup.sh` 會安裝 Python 套件及 Chromium。第一次使用先執行：
 
 ```bash
 bash setup.sh
@@ -105,7 +105,11 @@ bash scripts/run.sh all --force-login
   "summary": {
     "account_count": 0,
     "transaction_count": 0,
-    "transactions_by_source": {}
+    "transactions_by_source": {
+      "twd_account": 0,
+      "credit_card": 0,
+      "debit_card": 0
+    }
   }
 }
 ```
@@ -127,6 +131,8 @@ bash scripts/run.sh all --force-login
 
 帳號與卡號預設遮罩。
 
+`period` 是以執行當天向前推一個日曆月（例如 10/18 到 9/18），而不是固定 30 天。能解析日期的交易才會依 `period` 篩選；來源資料缺少可解析日期時，該筆交易仍會保留且 `date` 為 `null`，不代表已確認在期間內。
+
 ## Session lifecycle
 
 每次 command：
@@ -140,12 +146,12 @@ acquire process lock
   → close card tab
   → normalize output
   → finally: ESB 主 tab header logout + confirm
-  → wait until 「重新登入」
+  → best-effort wait for 「重新登入」
   → close context / Chromium
   → release lock
 ```
 
-即使查詢中途丟 exception，也會走 `finally` 嘗試 logout 並關閉 browser。
+即使查詢中途發生 exception，也會走 `finally` 嘗試 logout 並關閉 browser。銀行端登出屬 best-effort，不保證網路中斷時一定成功。
 
 ## 安全邊界
 
@@ -156,15 +162,12 @@ acquire process lock
 - 不把 raw banking payload / HAR commit 進 repo
 - 跨 process lock 避免兩個 CLI 同時登入同一帳號
 
-## 驗證
+## 離線驗證
 
-VPS headless Chromium 曾實測完整 `all` 成功：
+```bash
+.venv/bin/python -m unittest discover -s tests -p 'test_*.py' -v
+bash -n setup.sh scripts/run.sh
+bash scripts/run.sh --help
+```
 
-- 臺幣帳戶 1 個
-- 近一月臺幣交易 41 筆
-- 信用卡 2 張
-- 近一月信用卡交易 22 筆
-- 簽帳金融卡 1 張
-- 近一月簽帳交易 21 筆
-
-資料筆數會隨實際交易變動。
+離線測試只涵蓋 CLI 參數、資料正規化與憑證安全契約，不會登入銀行。實際網銀 API 可能改版，需另外以授權的測試環境確認。

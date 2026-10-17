@@ -7,9 +7,7 @@ metadata:
 
 # 玉山銀行 Browser API CLI
 
-這份 skill 已完成 v3 breaking rewrite。
-
-舊版 iframe / DOM scraper、balance / bills / statement-month commands 不再是正式能力。不要重新走舊 selector。
+這份 skill 僅支援 v3 Browser API 的交易查詢。JSON API 使用已登入的瀏覽器工作階段，登入、Token 和登出仍依賴 Playwright / Chromium，不是純 HTTP CLI。舊版 iframe / DOM scraper、balance / bills / statement-month commands 已移除，不要呼叫舊 selector 或模組。
 
 ## Credential
 
@@ -19,14 +17,14 @@ metadata:
 ~/.hermes/esun-bank/credentials.json
 ```
 
-來源優先順序：
+憑證檔案選擇順序：
 
 1. `--credentials-file`
 2. `ESUN_CREDENTIALS_FILE`
 3. `~/.hermes/esun-bank/credentials.json`
-4. `ESUN_ID` / `ESUN_USER` / `ESUN_PASSWORD`
+如果選定的憑證檔案缺少欄位，會用 `ESUN_ID` / `ESUN_USER` / `ESUN_PASSWORD` 補足；沒有任何檔案時也可以只使用環境變數。
 
-不得讀出、顯示或複製 credential 值。
+POSIX 憑證檔案權限必須是 `600`。不得讀出、顯示或複製 credential 值。
 
 ## Commands
 
@@ -94,6 +92,8 @@ source：
 
 未知或不適用欄位使用 null，不用 0 猜值。
 
+期間為執行當天往前一個日曆月；無法解析日期的交易仍會保留，`date` 為 null。
+
 ## Session lifecycle
 
 CLI 必須保留：
@@ -106,11 +106,11 @@ CLI 必須保留：
 6. close the card tab
 7. normalize all requested sources
 8. finally perform the two-step header logout on the original ESB tab
-9. wait until 「重新登入」 is visible
+9. best-effort wait until 「重新登入」 is visible
 10. close context / Chromium
 11. release lock
 
-即使 query exception，也要執行 cleanup。
+即使 query exception，也要執行 cleanup。銀行端登出失敗仍需關閉本地 browser。
 
 ## 禁止能力
 
@@ -131,5 +131,6 @@ CLI 必須保留：
 - `scripts/esun_bank/client.py`
 - `scripts/esun_bank/schema.py`
 - `scripts/esun_bank_cli.py`
+- `scripts/run.sh`
 
-舊 module filenames 若仍存在，只是 migration tombstone，不是可用 API。
+本地測試請執行 `.venv/bin/python -m unittest discover -s tests -p 'test_*.py'`，不可用真實銀行憑證當成自動測試資料。

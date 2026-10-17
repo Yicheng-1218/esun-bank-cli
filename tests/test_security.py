@@ -1,7 +1,7 @@
-import argparse
-import unittest
 import sys
+import unittest
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 import esun_bank_cli

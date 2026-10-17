@@ -24,6 +24,8 @@ CLI 也接受顯式 `--credentials-file` / `ESUN_CREDENTIALS_FILE` 覆寫。
 - Authorization token 寫入 disk
 - raw banking payload commit 到 Git
 
+臨時網銀偵錯輸出應留在 repository 之外的私人目錄（或忽略的 `tmp/`），不要提交 HAR、完整交易明細或 browser trace。範例憑證僅供說明欄位，不得填入真實資料。
+
 ## Bank session
 
 銀行登入不是「零副作用」：登入會建立 / 取代 server-side session。
@@ -36,7 +38,7 @@ CLI 也接受顯式 `--credentials-file` / `ESUN_CREDENTIALS_FILE` 覆寫。
 - batch / all 只登入一次
 - ESB 主 tab 保留到最後；卡片 SSO 使用同 context 的獨立 tab
 - 正常或 exception 都 best-effort 執行 header「登出」→「立即登出」
-- 等待「重新登入」出現後才關閉 browser context
+- 嘗試等待「重新登入」出現；若失敗仍會關閉 browser context
 - 最後一定 close Chromium 並釋放 process lock
 
 ## Read-only boundary

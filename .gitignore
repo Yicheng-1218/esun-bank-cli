@@ -18,3 +18,11 @@ credentials.json
 
 .playwright-cli/
 *.env
+
+# Local investigation and bank API captures: never commit.
+tmp/
+*.har
+*.trace.zip
+
+# Optional local code index.
+.codegraph/
