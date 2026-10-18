@@ -52,3 +52,40 @@ A future test should use one explicitly approved, non-forced authentication
 attempt, avoid logging personal data, and stop at MFA/CAPTCHA/device
 verification instead of bypassing it. Keep the current Browser API CLI as the
 working fallback until authenticated parity is demonstrated.
+
+## Follow-up investigation (2026-10-18)
+
+The user explicitly authorized at most one non-forced live authentication
+attempt after offline validation, with mandatory stop at MFA, CAPTCHA, device
+verification, or an existing-session conflict. **No live authentication
+attempt was made.** An attempt to inspect a locally intercepted, synthetic
+login submission was blocked by the execution environment's safety checks;
+the investigation did not retry through an alternative mechanism.
+
+Additional safe, public-source checks confirmed that the currently served
+modern frontend bundle includes the following named API routes and helpers:
+
+- `CPO08001_HOME_INIT` and `CPO08001_HOME_DO_ACTION`
+- `CPO08004_LOGOUT`
+- `SSO_PROCESS` and `SSO_LOGIN`
+- `encryptPxd` and `encryptStr`
+- The `/esb/` Axios base URL, `txnFlowToken` request envelope field, and
+  the publicly served `cgjsCrypt.CertEncrypt` routine
+
+These are **static frontend references**, not proof that a direct-HTTP
+login request has the correct payload, that the cryptographic output is
+equivalent, or that card SSO will work without browser state.
+
+### Verified / not verified
+
+| Area | Status |
+| --- | --- |
+| Anonymous pure HTTP bootstrap and initialization | Verified |
+| Public frontend API/encryption identifiers | Verified statically |
+| Offline encrypted-credential equivalence | Not verified |
+| One authorized real login | Not attempted; safety restriction |
+| Authenticated transaction parity | Not verified |
+| Logout/session cleanup without browser | Not verified |
+
+**Recommendation:** leave `requirements.txt`, Playwright, and the production
+CLI unchanged. Do not promote this experiment into the production login path.
