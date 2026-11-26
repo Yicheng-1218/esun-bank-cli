@@ -10,7 +10,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-GLOBAL_CREDENTIALS_FILE = Path("~/.hermes/esun-bank/credentials.json").expanduser()
+GLOBAL_CREDENTIALS_FILE = Path("~/.config/esun-bank-cli/credentials.json").expanduser()
 DEFAULT_LOCK_FILE = Path(tempfile.gettempdir()) / "esun-bank-cli-session.lock"
 
 ENV_ID = "ESUN_ID"
@@ -102,7 +102,7 @@ def _read_credentials_file(path: Path) -> dict[str, Any]:
 
 
 def load_credentials(args: argparse.Namespace) -> dict[str, str]:
-    """Load one account-level E.SUN credential shared by all Hermes profiles."""
+    """Load one account-level E.SUN credential independent of the calling agent."""
 
     data: dict[str, Any] = {}
     explicit = getattr(args, "credentials_file", None)

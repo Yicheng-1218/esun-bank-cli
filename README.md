@@ -51,13 +51,15 @@ bash setup.sh
 
 ```bash
 umask 077
-mkdir -p "$HOME/.hermes/esun-bank"
-chmod 700 "$HOME/.hermes/esun-bank"
-cp -n credentials.example.json "$HOME/.hermes/esun-bank/credentials.json"
-chmod 600 "$HOME/.hermes/esun-bank/credentials.json"
+mkdir -p "$HOME/.config/esun-bank-cli"
+chmod 700 "$HOME/.config/esun-bank-cli"
+cp -n credentials.example.json "$HOME/.config/esun-bank-cli/credentials.json"
+chmod 600 "$HOME/.config/esun-bank-cli/credentials.json"
 ```
 
 使用本地編輯器填入自己的網銀身分證字號（或統一編號）、使用者名稱及密碼。也可以用 `--credentials-file` 指定其他私有憑證檔。
+
+預設憑證與快取位置皆獨立於任何 Agent。從舊版升級時，可將既有憑證移至新位置（保留 0600 權限），或用 `--credentials-file` 指定原檔案。
 
 請勿將真實憑證放進 repository、貼到聊天視窗或上傳至 GitHub。
 
@@ -102,12 +104,13 @@ Agent 應優先使用快取，只有取得使用者明確授權後才即時登�
 
 ## 目前狀態與限制
 
-目前版本：**v4.0.1**。
+目前版本：**v4.0.2**。
 
-原純 HTTP 實驗版曾完成信用卡、簽帳金融卡與臺幣交易的真實整合驗證。最新版 CLI 與新增帳單功能已通過離線測試，但尚未完成新版真實銀行端到端驗證。
+已通過離線測試及 2026-11-26 真實網銀端到端測試：使用一次非強制登入，完成臺幣交易、信用卡與簽帳金融卡各一頁歷史交易、最新一期已出帳帳單明細與摘要、分期資料結構及登出驗證。測試不保存交易資料或憑證於 repository。
 
 - 未出帳交易尚未支援。
 - 查詢月份與頁數是篩選及請求上限，不保證銀行回傳完整歷史資料。
+- 多頁歷史交易、多期帳單及跨帳戶的完整性未經此次真實測試逐項比對。
 - 分期結果僅依已出帳資料判讀，不應視為完整負債清單。
 - 本地快取仍包含敏感財務資料，請妥善保管；快取逾期不代表檔案已刪除。
 - 銀行介面更新可能導致功能暫時失效。

@@ -12,8 +12,11 @@ from esun_bank.session import GLOBAL_CREDENTIALS_FILE
 
 class SecurityContractTest(unittest.TestCase):
     def test_default_credential_is_global_not_profile_specific(self):
-        self.assertTrue(str(GLOBAL_CREDENTIALS_FILE).endswith("/.hermes/esun-bank/credentials.json"))
+        self.assertTrue(str(GLOBAL_CREDENTIALS_FILE).endswith("/.config/esun-bank-cli/credentials.json"))
         self.assertNotIn("/profiles/", str(GLOBAL_CREDENTIALS_FILE))
+
+    def test_default_cache_is_agent_independent(self):
+        self.assertTrue(str(esun_bank_cli.CACHE_DIR).endswith("/.cache/esun-bank-cli"))
 
     def test_force_login_is_disabled_in_http_mode(self):
         parser = esun_bank_cli.build_parser()

@@ -28,7 +28,7 @@ SOURCES = ("twd", "credit", "debit")
 EXTRAS = ("statements", "installments")
 ALL_CHOICES = SOURCES + EXTRAS
 MAX_CARD_PAGES = 4
-CACHE_DIR = Path("~/.hermes/esun-bank/cache").expanduser()
+CACHE_DIR = Path("~/.cache/esun-bank-cli").expanduser()
 TAIPEI = timezone(timedelta(hours=8))
 
 

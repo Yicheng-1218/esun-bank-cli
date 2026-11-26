@@ -2,7 +2,7 @@
 name: esun-bank-cli
 description: "查詢使用者本人玉山銀行（E.SUN）信用卡、簽帳金融卡、臺幣帳戶交易、歷史帳單及分期；純 HTTPX、一次登入 Batch、私有短期快取。適用消費統計、固定開支、現金流、分期與裸辭生活費試算。只能唯讀。"
 metadata:
-  version: "4.0.1"
+  version: "4.0.2"
 ---
 
 # 玉山銀行 CLI 使用指引（HTTPX 唯讀版）
@@ -74,8 +74,8 @@ bash "$SKILL_DIR/scripts/run.sh" full --help
 
 - **唯讀**：不得實作轉帳、繳款、受款人管理、帳戶卡片設定、修改憑證或其他資金／設定異動。
 - 銀行登入並非零副作用：可能產生通知或影響原 Session。CLI 只提供非強制登入；遇到 Session 衝突、MFA、驗證碼立即停止，**不可繞過**。
-- 憑證僅使用 `~/.hermes/esun-bank/credentials.json`（0600）或明確指定私有路徑，不要讀出、顯示、複製帳密；不可輸出 Authorization、Cookie、Token、原始銀行 response。
-- 私有正規化快取：`~/.hermes/esun-bank/cache/`，目錄 0700、檔案 0600。快取仍包含**敏感的金額、交易摘要／備註**，不要貼出整份 JSON、上傳到 Git、或存到公開路徑；對話只呈現必要加總、遮罩與分析。
+- 憑證僅使用 `~/.config/esun-bank-cli/credentials.json`（0600）或明確指定私有路徑，不要讀出、顯示、複製帳密；不可輸出 Authorization、Cookie、Token、原始銀行 response。
+- 私有正規化快取：`~/.cache/esun-bank-cli/`，目錄 0700、檔案 0600。快取仍包含**敏感的金額、交易摘要／備註**，不要貼出整份 JSON、上傳到 Git、或存到公開路徑；對話只呈現必要加總、遮罩與分析。
 - CLI 失敗時不重試登入，不自行切回 Playwright、不編寫新的銀行 API 探勘腳本。只呈報固定錯誤與可驗證的診斷步驟；必要時請使用者決定是否另行查詢。
 - 不進行無必要的銀行實測，離線測試用合成資料與 MockTransport，不使用真實憑證。
 
@@ -92,6 +92,6 @@ CLI → 本地快取/跨程序鎖
 
 主要檔案：`scripts/esun_bank_cli.py`（命令、快取、調度），`scripts/esun_bank/http_protocol.py`（ESB／SSO），`http_card.py`（兩組卡片 API），`http_crypto.py`（RSA），`statements.py`（帳單與分期），`schema.py`（交易結構），`session.py`（憑證與鎖），`tests/`（離線測試）。
 
-**驗證界線：**原純 HTTP 實驗版三種交易曾完成實際銀行整合檢查；這次正式入口與新增 CARDBILL 流程已完成公開 SPA 契約檢查與離線測試，尚未用真實銀行帳號驗證完整端到端。不要宣稱完全實測上線。
+**驗證界線：**2026-11-26 正式 HTTPX 查詢流程通過真實網銀端到端測試：一次登入完成臺幣交易、信用卡及簽帳金融卡各一頁、最新一期已出帳帳單明細與摘要、分期資料結構及登出。多頁、多期及不同帳戶資料完整性未逐項驗證，不可將測試成功解讀為所有資料皆已涵蓋。
 
 詳細路徑、參數與限制見 `README.md`，安全規範以 `SECURITY.md` 為準。
