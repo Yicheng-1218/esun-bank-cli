@@ -1,1 +1,1 @@
-"""E.SUN Bank browser API CLI internals."""
+"""E.SUN Bank pure-HTTP read-only CLI internals."""

@@ -24,7 +24,9 @@ CLI 也接受顯式 `--credentials-file` / `ESUN_CREDENTIALS_FILE` 覆寫。
 - Authorization token 寫入 disk
 - raw banking payload commit 到 Git
 
-臨時網銀偵錯輸出應留在 repository 之外的私人目錄（或忽略的 `tmp/`），不要提交 HAR、完整交易明細或 browser trace。範例憑證僅供說明欄位，不得填入真實資料。
+臨時網銀偵錯輸出應留在 repository 之外的私人目錄（或忽略的 `tmp/`），不要提交 HAR、完整交易明細或 token/cookie。範例憑證僅供說明欄位，不得填入真實資料。
+
+正規化回應快取儲存在 `~/.hermes/esun-bank/cache`，目錄 `0700`、檔案 `0600`；不可儲存 session、原始銀行 payload 或密碼。預設 15 分鐘後不再使用舊快取，舊檔可能仍留在磁碟直到另行清理，不得將此誤稱為定時刪除。
 
 ## Bank session
 
@@ -33,13 +35,13 @@ CLI 也接受顯式 `--credentials-file` / `ESUN_CREDENTIALS_FILE` 覆寫。
 因此：
 
 - 本機 CLI 使用 cross-process lock
-- 預設遇到 existing session 就停止
-- 只有 `--force-login` 才取代銀行既有 session
-- batch / all 只登入一次
-- ESB 主 tab 保留到最後；卡片 SSO 使用同 context 的獨立 tab
-- 正常或 exception 都 best-effort 執行 header「登出」→「立即登出」
-- 嘗試等待「重新登入」出現；若失敗仍會關閉 browser context
-- 最後一定 close Chromium 並釋放 process lock
+- 預設不登入：必須明確使用 `--confirm-live` 才能建立新的網銀 session
+- 遇到 existing session 就停止，不支援 `--force-login` 或自動重試
+- `full`、`batch`、`all` 共用一次非強制 ESB 登入
+- 以 HTTPX 分別保存 ESB、CARDTRANS、CARDBILL 的短效 cookie jar/Bearer，無瀏覽器
+- 正常或 exception 都 best-effort 呼叫 ESB 登出，清空全部短效 session 與 cookie jar
+- 關閉全部 HTTP clients、釋放跨程序 lock
+- 快取命中、或 `--cached-only` 命中時不連線銀行，也不觸發登入通知
 
 ## Read-only boundary
 
@@ -48,5 +50,7 @@ CLI 也接受顯式 `--credentials-file` / `ESUN_CREDENTIALS_FILE` 覆寫。
 - credit-card transactions
 - debit-card transactions
 - TWD account transactions
+- issued credit-card statements and summaries
+- installments observable in issued statements
 
 不實作任何資金或帳戶設定 mutation。

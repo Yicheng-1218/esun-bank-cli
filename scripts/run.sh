@@ -20,8 +20,8 @@ if [[ ! -f "$VENV_DIR/pyvenv.cfg" || ! -x "$PYTHON_BIN" ]] || ! "$PYTHON_BIN" -c
   exit 1
 fi
 
-if ! "$PYTHON_BIN" -c 'from playwright.async_api import async_playwright' >/dev/null 2>&1; then
-  echo "error: skill virtualenv Playwright is missing or unusable." >&2
+if ! "$PYTHON_BIN" -c 'import httpx, cryptography' >/dev/null 2>&1; then
+  echo "error: skill virtualenv HTTPX/cryptography dependencies are missing." >&2
   printf 'run: bash %q\n' "$SKILL_DIR/setup.sh" >&2
   exit 1
 fi

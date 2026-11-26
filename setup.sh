@@ -59,10 +59,9 @@ if command -v uv >/dev/null 2>&1; then
 else
   "${PYTHON_CMD[@]}" -m pip install -r "$SCRIPT_DIR/requirements.txt"
 fi
-if ! "${PYTHON_CMD[@]}" -c 'from playwright.async_api import async_playwright' >/dev/null 2>&1; then
-  echo "error: skill virtualenv Playwright import failed. Repair it with setup.sh." >&2
+if ! "${PYTHON_CMD[@]}" -c 'import httpx, cryptography' >/dev/null 2>&1; then
+  echo "error: skill virtualenv HTTPX/cryptography import failed. Repair it with setup.sh." >&2
   exit 1
 fi
-"${PYTHON_CMD[@]}" -m playwright install chromium
 
 echo "Setup complete."

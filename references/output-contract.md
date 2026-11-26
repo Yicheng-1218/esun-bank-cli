@@ -2,6 +2,22 @@
 
 ## Envelope
 
+v4 CLI retains schema version 3.0 for normalized transactions and adds
+optional issued-statement/installment results. Successful CLI responses
+also include `request`:
+
+```json
+{"transport":"httpx","mode":"local_cache","bank_logins":0}
+```
+
+`mode` is `bank_live` (one login) or `local_cache` (zero logins).
+When requested, `statements` and/or `installments` are included,
+along with `statement_coverage`. The latter records the requested
+statement-month count, not proof of complete data. Pending/unbilled
+transactions are excluded. `installments.active` is based on explicit
+remaining amounts in the latest issued statement; missing evidence
+must not be interpreted as a zero balance.
+
 Every command returns:
 
 ```json

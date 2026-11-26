@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import calendar
 import re
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
@@ -17,13 +17,13 @@ SOURCE_NAMES = {
 }
 
 
-def one_month_range(today: date | None = None) -> tuple[date, date]:
-    end = today or date.today()
-    year = end.year
-    month = end.month - 1
-    if month == 0:
-        year -= 1
-        month = 12
+def one_month_range(today: date | None = None, *, months: int = 1) -> tuple[date, date]:
+    end = today or datetime.now(timezone(timedelta(hours=8))).date()
+    if not 1 <= months <= 11:
+        raise ValueError("months must be between 1 and 11")
+    index = end.year * 12 + (end.month - 1) - months
+    year, month_index = divmod(index, 12)
+    month = month_index + 1
     day = min(end.day, calendar.monthrange(year, month)[1])
     return date(year, month, day), end
 
@@ -145,8 +145,9 @@ def normalize(
     requested: list[str],
     card_payloads: dict[str, dict[str, Any]] | None = None,
     twd_payload: dict[str, Any] | None = None,
+    months: int = 1,
 ) -> dict[str, Any]:
-    start, end = one_month_range()
+    start, end = one_month_range(months=months)
     accounts: list[dict[str, Any]] = []
     transactions: list[dict[str, Any]] = []
 
@@ -279,5 +280,7 @@ def normalize(
             "account_count": len(accounts),
             "transaction_count": len(transactions),
             "transactions_by_source": counts,
+            "limitations": (["TWD prequery may include less than the requested history; verify completeness in the bank app."]
+                            if months > 1 and "twd" in requested else []),
         },
     }

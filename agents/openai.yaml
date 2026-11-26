@@ -1,4 +1,4 @@
 interface:
-  display_name: "玉山銀行 Browser API CLI"
-  short_description: "使用 Playwright 登入玉山網銀，透過 browser-authenticated JSON API 查詢近一月交易。"
-  default_prompt: "只執行唯讀帳務查詢；優先使用 batch，一次登入取得信用卡、簽帳金融卡與臺幣帳戶交易，輸出 v3 統一 schema。"
+  display_name: "玉山銀行唯讀 CLI"
+  short_description: "純 HTTPX 查詢玉山信用卡、簽帳卡、帳戶交易、帳單與分期；一次登入、批次查詢、短期快取。"
+  default_prompt: "先閱讀 SKILL.md。只使用正式 scripts/run.sh 的唯讀命令，優先 full/batch 並沿用相同查詢參數的快取；沒有效快取時，除非使用者已明確授權即時銀行查詢，否則不要使用 --confirm-live。絕不執行舊版瀏覽器探勘腳本。"

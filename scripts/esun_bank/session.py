@@ -10,7 +10,6 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-ESB_URL = "https://ebank.esunbank.com.tw/esb/"
 GLOBAL_CREDENTIALS_FILE = Path("~/.hermes/esun-bank/credentials.json").expanduser()
 DEFAULT_LOCK_FILE = Path(tempfile.gettempdir()) / "esun-bank-cli-session.lock"
 
@@ -143,70 +142,3 @@ def load_credentials(args: argparse.Namespace) -> dict[str, str]:
         )
 
     return {"id": str(user_id), "user": str(username), "password": str(password)}
-
-
-async def login(page: Any, args: argparse.Namespace) -> None:
-    creds = load_credentials(args)
-
-    await page.goto(ESB_URL, wait_until="domcontentloaded", timeout=args.timeout_ms)
-    await page.locator('input[name="id"]').fill(creds["id"])
-    await page.locator('input[name="userName"]').fill(creds["user"])
-    await page.locator('input[name="pxssword"]').fill(creds["password"])
-    await page.get_by_role("button", name="登入").click()
-
-    confirm = page.get_by_role("button", name="確定登入", exact=True)
-    try:
-        await confirm.wait_for(state="visible", timeout=4000)
-        if not args.force_login:
-            raise CliError(
-                "E.SUN reports an existing login session. "
-                "Re-run with --force-login only if you want to replace it."
-            )
-        await confirm.click()
-    except CliError:
-        raise
-    except Exception:
-        pass
-
-    try:
-        await page.wait_for_load_state("networkidle", timeout=min(args.timeout_ms, 15_000))
-    except Exception:
-        await page.wait_for_timeout(2500)
-
-    if await page.locator('input[name="id"]').count():
-        raise CliError("E.SUN login did not complete.")
-
-
-async def logout(page: Any) -> None:
-    """Best-effort logout from the original authenticated ESB page."""
-
-    try:
-        text_nodes = page.locator(".header-option-entry-text")
-        opened = False
-        for i in range(await text_nodes.count()):
-            node = text_nodes.nth(i)
-            if await node.is_visible() and (await node.inner_text()).strip() == "登出":
-                await node.click()
-                opened = True
-                break
-
-        if not opened:
-            return
-
-        await page.wait_for_timeout(300)
-        confirms = page.get_by_role("button", name="立即登出", exact=True)
-        for i in range(await confirms.count()):
-            confirm = confirms.nth(i)
-            if await confirm.is_visible():
-                await confirm.click()
-                break
-
-        try:
-            await page.get_by_text("重新登入", exact=True).wait_for(
-                state="visible",
-                timeout=8_000,
-            )
-        except Exception:
-            await page.wait_for_timeout(2500)
-    except Exception:
-        pass

@@ -1,4 +1,6 @@
 import sys
+import contextlib
+import io
 import unittest
 from pathlib import Path
 
@@ -13,12 +15,13 @@ class SecurityContractTest(unittest.TestCase):
         self.assertTrue(str(GLOBAL_CREDENTIALS_FILE).endswith("/.hermes/esun-bank/credentials.json"))
         self.assertNotIn("/profiles/", str(GLOBAL_CREDENTIALS_FILE))
 
-    def test_force_login_is_opt_in(self):
+    def test_force_login_is_disabled_in_http_mode(self):
         parser = esun_bank_cli.build_parser()
         args = parser.parse_args(["all"])
-        self.assertFalse(args.force_login)
-        forced = parser.parse_args(["all", "--force-login"])
-        self.assertTrue(forced.force_login)
+        self.assertFalse(args.confirm_live)
+        with contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit):
+                parser.parse_args(["all", "--force-login"])
 
     def test_no_mutation_commands(self):
         parser = esun_bank_cli.build_parser()
